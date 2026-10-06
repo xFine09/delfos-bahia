@@ -57,8 +57,8 @@ Estado: ☐ 1 ☐ 2 ☐ 3 ☐ 4 ☐ 5 ☐ 6
 4. Anotar cualquier incidencia en [`log-cabezazos.md`](log-cabezazos.md).
 
 ## Integrantes
-- Tu nombre
-- Nombre de tu compañero
+- Ale Serrano
+- Pedro Catalán
 
 ## Entrega
 4 de noviembre de 2026
