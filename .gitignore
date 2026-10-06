@@ -1,0 +1,11 @@
+# Paquetes e imágenes pesadas (se documentan en software/)
+*.rpm
+*.deb
+*.zip
+*.qcow2
+*.iso
+# Credenciales y temporales
+*.env
+*.log
+*.swp
+.DS_Store
