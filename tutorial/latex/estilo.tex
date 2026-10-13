@@ -1,0 +1,120 @@
+% =====================================================================
+% estilo.tex — paquetes, estilos de código y cajas del tutorial delfos-bahia
+% Si ya tienes un documento propio, haz \input{estilo} en su preámbulo
+% (o copia de aquí lo que te falte) para poder usar semana2.tex y cabezazos.tex.
+% =====================================================================
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\IfFileExists{lmodern.sty}{\usepackage{lmodern}}{}
+
+% Idioma: español si está instalado (paquete texlive-lang-spanish)
+\IfFileExists{spanish.ldf}{%
+  \usepackage[spanish,es-tabla,es-noshorthands]{babel}%
+}{%
+  \usepackage[english]{babel}%
+  \addto\captionsenglish{%
+    \renewcommand{\figurename}{Figura}%
+    \renewcommand{\tablename}{Tabla}%
+    \renewcommand{\contentsname}{Índice}%
+    \renewcommand{\listfigurename}{Índice de figuras}%
+    \renewcommand{\chaptername}{Capítulo}%
+  }%
+}
+
+\usepackage[a4paper,margin=2.3cm]{geometry}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{xltabular}
+\usepackage{enumitem}
+\usepackage[table]{xcolor}
+\usepackage{listings}
+\usepackage[most]{tcolorbox}
+\usepackage{url}
+\usepackage{hyperref}
+% Permite partir rutas y comandos largos en cualquier carácter (tablas estrechas)
+\makeatletter\g@addto@macro{\UrlBreaks}{\do\a\do\b\do\c\do\d\do\e\do\f\do\g\do\h\do\i\do\j\do\k\do\l\do\m\do\n\do\o\do\p\do\q\do\r\do\s\do\t\do\u\do\v\do\w\do\x\do\y\do\z\do\A\do\B\do\C\do\D\do\E\do\F\do\G\do\H\do\I\do\J\do\K\do\L\do\M\do\N\do\O\do\P\do\Q\do\R\do\S\do\T\do\U\do\V\do\W\do\X\do\Y\do\Z\do\_\do\-\do\=\do\.}\makeatother
+\urlstyle{tt}
+
+\graphicspath{{img/semana2/}{img/}}
+
+\definecolor{fondocodigo}{HTML}{F4F5F7}
+\definecolor{bordecodigo}{HTML}{C9CED6}
+\definecolor{comentario}{HTML}{6A737D}
+\definecolor{palabra}{HTML}{005CC5}
+\definecolor{cadena}{HTML}{22863A}
+\definecolor{rojocab}{HTML}{B3261E}
+\definecolor{verdesol}{HTML}{1E7B34}
+\definecolor{azulnota}{HTML}{1F5FA8}
+
+\hypersetup{colorlinks=true,linkcolor=azulnota,urlcolor=azulnota,citecolor=azulnota}
+
+% --- Listados de comandos y ficheros ---------------------------------
+\lstdefinestyle{terminal}{
+  basicstyle=\ttfamily\footnotesize,
+  backgroundcolor=\color{fondocodigo},
+  frame=single, rulecolor=\color{bordecodigo},
+  framesep=4pt, xleftmargin=6pt, xrightmargin=6pt,
+  breaklines=true, breakatwhitespace=false,
+  postbreak=\mbox{\textcolor{comentario}{$\hookrightarrow$}\space},
+  columns=fullflexible, keepspaces=true, showstringspaces=false,
+  commentstyle=\color{comentario}\itshape,
+  keywordstyle=\color{palabra}\bfseries,
+  stringstyle=\color{cadena},
+  upquote=true,
+  literate=
+    {á}{{\'a}}1 {é}{{\'e}}1 {í}{{\'i}}1 {ó}{{\'o}}1 {ú}{{\'u}}1
+    {Á}{{\'A}}1 {É}{{\'E}}1 {Í}{{\'I}}1 {Ó}{{\'O}}1 {Ú}{{\'U}}1
+    {ñ}{{\~n}}1 {Ñ}{{\~N}}1 {º}{{\textordmasculine}}1 {ü}{{\"u}}1
+    {→}{{$\rightarrow$}}1
+}
+\lstdefinestyle{bash}{style=terminal, language=bash, morekeywords={sudo,virsh,dpkg,alien,lsnrctl,sqlplus,dbca,systemctl,qemu-img,lvextend,growpart,pvresize}}
+\lstdefinestyle{sql}{style=terminal, language=SQL}
+\lstdefinestyle{fichero}{style=terminal}
+\lstset{style=terminal}
+
+% --- Cajas -------------------------------------------------------------
+% Cabezazo: \begin{cabezazo}{Título}{etiqueta} ... \end{cabezazo}
+\newcounter{cabezazo}
+\newtcolorbox{cabezazo}[3][]{%
+  enhanced, breakable, #1,
+  colback=rojocab!4, colframe=rojocab, boxrule=0.6pt, arc=2pt,
+  left=6pt, right=6pt, top=4pt, bottom=4pt,
+  fonttitle=\bfseries\small, coltitle=white,
+  title={\refstepcounter{cabezazo}\label{#3}Cabezazo \thecabezazo: #2},
+  before upper={\small}
+}
+\newtcolorbox{nota}[1][Nota]{%
+  enhanced, breakable,
+  colback=azulnota!5, colframe=azulnota, boxrule=0.5pt, arc=2pt,
+  left=6pt, right=6pt, top=3pt, bottom=3pt,
+  fonttitle=\bfseries\small, coltitle=white, title={#1},
+  before upper={\small}
+}
+
+% Etiquetas dentro de un cabezazo
+\newcommand{\problema}{\textbf{\textcolor{rojocab}{Problema.}}~}
+\newcommand{\causa}{\par\smallskip\textbf{Causa.}~}
+\newcommand{\solucion}{\par\smallskip\textbf{\textcolor{verdesol}{Solución.}}~}
+
+% Captura de pantalla: \captura[ancho]{fichero}{pie}{etiqueta}
+\newcommand{\captura}[4][0.95\linewidth]{%
+  \begin{figure}[H]
+    \centering
+    \includegraphics[width=#1,height=0.42\textheight,keepaspectratio]{#2}
+    \caption{#3}\label{#4}
+  \end{figure}}
+
+% Comandos en línea
+% (admite _ y $ sin escapar; no usar # ni % dentro)
+\newcommand{\cmd}[1]{\texttt{\detokenize{#1}}}
+\setlength{\emergencystretch}{3em}
+
+% \cmdb{...}: como \cmd pero con puntos de corte entre caracteres (para tablas estrechas)
+\ExplSyntaxOn
+\cs_new_protected:Npn \delfos_cmdbreak:n #1
+  { \str_map_inline:nn {#1} { ##1 \penalty 200 \hskip 0pt \relax } }
+\NewDocumentCommand \cmdb { m } { \texttt { \delfos_cmdbreak:n {#1} } }
+\ExplSyntaxOff

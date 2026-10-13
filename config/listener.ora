@@ -1,0 +1,8 @@
+# $ORACLE_HOME/network/admin/listener.ora  (delfos.inf)
+LISTENER =
+  (DESCRIPTION_LIST =
+    (DESCRIPTION =
+      (ADDRESS = (PROTOCOL = TCP)(HOST = delfos.inf)(PORT = 1521))
+      (ADDRESS = (PROTOCOL = IPC)(KEY = EXTPROC1521))
+    )
+  )

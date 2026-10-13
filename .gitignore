@@ -9,3 +9,13 @@
 *.log
 *.swp
 .DS_Store
+
+# LaTeX (se versiona el .tex y el PDF final)
+*.aux
+*.toc
+*.out
+*.lof
+*.lot
+*.fls
+*.fdb_latexmk
+*.synctex.gz
