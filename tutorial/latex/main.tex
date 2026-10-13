@@ -1,0 +1,27 @@
+% =====================================================================
+% main.tex — Tutorial del mini proyecto delfos-bahia (ASGBD)
+% Compilar con: pdflatex main.tex (dos veces, para índices y referencias)
+% Si ya tenéis vuestro documento principal, basta con:
+%   - \input{estilo} en el preámbulo (o copiar lo que falte),
+%   - \input{semana2} y \input{cabezazos} donde corresponda,
+%   - copiar la carpeta img/semana2.
+% =====================================================================
+\documentclass[11pt,a4paper,oneside]{report}
+\input{estilo}
+
+\title{\textbf{delfos-bahia}\\[4pt]
+\large Despliegue de Oracle XE 21c en \texttt{delfos.inf}\\
+y creación de la base de datos BAHIA.inf}
+\author{Ale Serrano \and Pedro Catalán\\[4pt]
+\small 2º ASIR · Administración de Sistemas Gestores de Bases de Datos}
+\date{Entrega: 4 de noviembre de 2026}
+
+\begin{document}
+\maketitle
+\tableofcontents
+
+% \input{semana1}   % <- capítulo de la semana 1 (VM, red y preparación OFA)
+\input{semana2}
+\input{cabezazos}
+
+\end{document}
