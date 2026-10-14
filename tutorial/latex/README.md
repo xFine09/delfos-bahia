@@ -1,7 +1,7 @@
 # Tutorial en LaTeX
 
 - `main.tex`: documento completo (Apartado 1, Apartado 2 y anexo con el log de cabezazos).
-- `Images/`: capturas de todos los apartados.
+- `Images/SemanaN/`: capturas de cada semana (`Semana1`, `Semana2`, ...).
 - `main.pdf`: vista previa compilada.
 
 Compilar dos veces con `pdflatex main.tex` (para el índice y las referencias).
