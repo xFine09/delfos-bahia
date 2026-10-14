@@ -1,27 +1,1669 @@
-% =====================================================================
-% main.tex — Tutorial del mini proyecto delfos-bahia (ASGBD)
-% Compilar con: pdflatex main.tex (dos veces, para índices y referencias)
-% Si ya tenéis vuestro documento principal, basta con:
-%   - \input{estilo} en el preámbulo (o copiar lo que falte),
-%   - \input{semana2} y \input{cabezazos} donde corresponda,
-%   - copiar la carpeta img/semana2.
-% =====================================================================
-\documentclass[11pt,a4paper,oneside]{report}
-\input{estilo}
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-tabla]{babel}
+\usepackage[top=2.5cm,bottom=2.5cm,left=2.5cm,right=2.5cm]{geometry}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{tabularx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{titletoc}
+\usepackage{microtype}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{xurl}
+\usepackage{hyperref}
 
-\title{\textbf{delfos-bahia}\\[4pt]
-\large Despliegue de Oracle XE 21c en \texttt{delfos.inf}\\
-y creación de la base de datos BAHIA.inf}
-\author{Ale Serrano \and Pedro Catalán\\[4pt]
-\small 2º ASIR · Administración de Sistemas Gestores de Bases de Datos}
-\date{Entrega: 4 de noviembre de 2026}
+% Carpeta donde se guardan las capturas de pantalla
+\graphicspath{{Images/}}
+
+% Paleta de colores para listados y enlaces
+\definecolor{codebg}{rgb}{0.96,0.97,0.98}
+\definecolor{codeframe}{rgb}{0.85,0.87,0.90}
+\definecolor{codecomment}{rgb}{0.45,0.50,0.55}
+\definecolor{codekeyword}{rgb}{0.10,0.35,0.75}
+\definecolor{codestring}{rgb}{0.20,0.55,0.25}
+\definecolor{navyblue}{rgb}{0.05,0.20,0.45}
+
+% Configuración de hyperref
+\hypersetup{
+    colorlinks=true,
+    linkcolor=navyblue,
+    citecolor=navyblue,
+    urlcolor=teal,
+    pdftitle={Despliegue del servidor delfos y exportacion a Postgres},
+    pdfauthor={Alejandro Serrano Cabrera, Pedro Catalan Catalan}
+}
+
+% Configuración del paquete listings
+\lstdefinestyle{customcode}{
+    backgroundcolor=\color{codebg},
+    commentstyle=\color{codecomment}\itshape,
+    keywordstyle=\color{codekeyword}\bfseries,
+    stringstyle=\color{codestring},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,
+    breaklines=true,
+    captionpos=b,
+    keepspaces=true,
+    showspaces=false,
+    showstringspaces=false,
+    showtabs=false,
+    tabsize=2,
+    frame=single,
+    rulecolor=\color{codeframe},
+    frameround=tttt,
+    % Permite acentos y eñes dentro de los bloques de código
+    literate={á}{{\'a}}1 {é}{{\'e}}1 {í}{{\'i}}1 {ó}{{\'o}}1 {ú}{{\'u}}1
+             {Á}{{\'A}}1 {É}{{\'E}}1 {Í}{{\'I}}1 {Ó}{{\'O}}1 {Ú}{{\'U}}1
+             {ñ}{{\~n}}1 {Ñ}{{\~N}}1 {ü}{{\"u}}1
+}
+\lstset{style=customcode}
+
+% Columnas con alineación a la izquierda y ajuste automático de línea
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+
+% Macro segura para barras invertidas en rutas con punto de ruptura automático
+\newcommand{\bs}{\textbackslash\allowbreak}
+
+% Configuración de cabeceras y pies de página
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{\footnotesize \textbf{I.E.S. Fernando Aguilar Quignon} --- ASGBD}
+\rhead{\footnotesize Despliegue del servidor delfos}
+\cfoot{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0.4pt}
+
+% Las secciones se muestran como "Apartado N." en el texto y en el índice
+\titleformat{\section}{\normalfont\Large\bfseries\color{navyblue}}{Apartado \thesection.}{0.6em}{}
+\titlecontents{section}[0em]{\addvspace{0.8em}\bfseries}{Apartado \thecontentslabel.\enspace}{}{\titlerule*[0.6pc]{.}\contentspage}
+
+
+% ==================== AÑADIDOS PARA APARTADO 2 Y LOG DE CABEZAZOS ====================
+\usepackage[most]{tcolorbox}
+\usepackage{xltabular}
+\usepackage{colortbl}
+
+\definecolor{rojocab}{HTML}{B3261E}
+\definecolor{verdesol}{HTML}{1E7B34}
+
+% Estilos de listado usados en el Apartado 2 (heredan el estilo común)
+\lstdefinestyle{bash}{style=customcode, language=bash}
+\lstdefinestyle{sql}{style=customcode, language=SQL}
+\lstdefinestyle{fichero}{style=customcode}
+
+% Cuadro de cabezazo: \begin{cabezazo}[opciones]{Título}{etiqueta} ... \end{cabezazo}
+\newcounter{cabezazo}
+\newtcolorbox{cabezazo}[3][]{%
+  enhanced, breakable, #1,
+  colback=rojocab!4, colframe=rojocab, boxrule=0.6pt, arc=2pt,
+  left=6pt, right=6pt, top=4pt, bottom=4pt,
+  fonttitle=\bfseries\small, coltitle=white,
+  title={\refstepcounter{cabezazo}\label{#3}Cabezazo \thecabezazo: #2},
+  before upper={\small}
+}
+\newcommand{\problema}{\textbf{\textcolor{rojocab}{Problema.}}~}
+\newcommand{\causa}{\par\smallskip\textbf{Causa.}~}
+\newcommand{\solucion}{\par\smallskip\textbf{\textcolor{verdesol}{Solución.}}~}
+
+% Captura de pantalla: \captura[ancho]{fichero}{pie}{etiqueta}
+\newcommand{\captura}[4][0.9\textwidth]{%
+  \begin{figure}[H]
+    \centering
+    \includegraphics[width=#1,height=0.42\textheight,keepaspectratio]{#2}
+    \caption{#3}\label{#4}
+  \end{figure}}
+
+% Comando en línea (admite _ y $ sin escapar; no usar # ni %)
+\newcommand{\cmd}[1]{\texttt{\detokenize{#1}}}
+% Igual, pero con puntos de corte entre caracteres (tablas estrechas)
+\ExplSyntaxOn
+\cs_new_protected:Npn \delfos_cmdbreak:n #1
+  { \str_map_inline:nn {#1} { ##1 \penalty 200 \hskip 0pt \relax } }
+\NewDocumentCommand \cmdb { m } { \texttt { \delfos_cmdbreak:n {#1} } }
+\ExplSyntaxOff
+
+\setlength{\emergencystretch}{3em}
 
 \begin{document}
-\maketitle
-\tableofcontents
 
-% \input{semana1}   % <- capítulo de la semana 1 (VM, red y preparación OFA)
-\input{semana2}
-\input{cabezazos}
+% ==================== PORTADA ====================
+\begin{titlepage}
+    \centering
+    \vspace*{1.0cm}
+    {\Huge \textbf{I.E.S. Fernando Aguilar Quignon}}\\[0.4cm]
+    
+    {\Large \textbf{Administración de Sistemas Informáticos en Red (ASIR)}}\\[0.3cm]
+    {\large Módulo: Administración de Sistemas Gestores de Bases de Datos (1ª Evaluación)}\\[0.2cm]
+    \vspace*{1.0cm}
+    \rule{\linewidth}{0.5mm}\\[0.4cm]
+        \vspace*{0.5cm}
+    {\huge \bfseries Despliegue del servidor delfos y exportación a Postgres}\\[0.3cm]
+        \vspace*{0.5cm}
+    \rule{\linewidth}{0.5mm}\\[0.4cm]
+    
+    \vfill  % Empuja todo lo que sigue al final de la página
+    
+    \begin{minipage}[b]{0.48\textwidth}
+        \raggedright
+        \textbf{Autores:}\\
+        Alejandro Serrano Cabrera\\
+        Pedro Catalán Catalán
+    \end{minipage}
+    \hfill
+    \begin{minipage}[b]{0.48\textwidth}
+        \raggedleft
+        \textbf{Curso Académico:}\\
+        2026/2027
+    \end{minipage}
+\end{titlepage}
+
+% ==================== ÍNDICE ====================
+\tableofcontents
+\newpage
+\phantomsection
+% ==================== INTRODUCCIÓN ====================
+
+\section*{Introducción}
+\addcontentsline{toc}{section}{Introducción}
+
+El presente proyecto documenta el despliegue de un servidor de bases de datos Oracle Database Express Edition (XE) sobre una máquina virtual Ubuntu Server denominada \texttt{delfos.inf}, así como la posterior exportación de los datos a un sistema gestor PostgreSQL.
+
+El trabajo se ha llevado a cabo en paralelo sobre dos equipos anfitriones con distribuciones Linux diferentes: uno con Debian y otro con CachyOS, una distribución basada en Arch Linux. Ambos ejecutan el mismo hipervisor y alojan una máquina virtual idéntica, de modo que el procedimiento dentro del servidor \texttt{delfos.inf} es común. Las diferencias entre ambos entornos se limitan a la preparación del anfitrión y se indican expresamente allí donde aparecen.
+
+El trabajo se ha organizado en apartados que siguen el orden cronológico del despliegue. En cada uno se describen los objetivos, las decisiones técnicas adoptadas y su justificación, los comandos y ficheros de configuración empleados y, por último, las comprobaciones realizadas para verificar el resultado.
+
+Todos los scripts y ficheros de configuración utilizados se encuentran versionados en el repositorio GitHub del proyecto, junto con un registro de las incidencias encontradas durante el proceso y su resolución.
+
+\newpage
+
+% ==================== APARTADO 1 ====================
+\section{Preparación del entorno: VM, Ubuntu Server y arquitectura OFA}
+
+% --------------------------------------------------
+\subsection{Objetivos}
+
+El objetivo de este apartado es dejar preparado el servidor sobre el que se instalará Oracle Database XE. Al finalizarlo, el entorno debe cumplir las siguientes condiciones:
+
+\begin{itemize}
+    \item Los dos anfitriones, Debian y CachyOS, disponen de Qemu/KVM y libvirt operativos.
+    \item La máquina virtual \texttt{delfos.inf} está instalada con Ubuntu Server LTS y es accesible por SSH.
+    \item El sistema dispone de una dirección IP fija, un nombre de equipo completo y memoria de intercambio suficiente.
+    \item Existen el usuario \texttt{oracle}, sus grupos y la estructura de directorios definida por la arquitectura OFA.
+    \item Los parámetros del kernel, los límites de recursos y las variables de entorno cumplen los requisitos de Oracle.
+    \item Se dispone de un snapshot de la máquina virtual que permite volver a este estado en caso de error.
+\end{itemize}
+
+% --------------------------------------------------
+\subsection{Equipos anfitriones}
+
+Cada miembro del grupo trabaja sobre su propio equipo anfitrión, con una distribución distinta. La Tabla~\ref{tab:anfitriones} resume las diferencias entre ambos que afectan a este apartado.
+
+\begin{table}[!htbp]
+    \centering
+    \begin{tabularx}{\textwidth}{L{4cm} Y Y}
+        \toprule
+        \textbf{Aspecto} & \textbf{Debian} & \textbf{CachyOS} \\
+        \midrule
+        Responsable & Pedro Catalán & Alejandro Serrano \\
+        Base & Debian estable & Arch Linux \\
+        Modelo de publicación & Versiones estables periódicas & \textit{Rolling release} (actualización continua) \\
+        Gestor de paquetes & \texttt{apt} & \texttt{pacman} \\
+        Gestión de red & \texttt{ifupdown} o NetworkManager & NetworkManager \\
+        Cortafuegos por defecto & Ninguno & \texttt{ufw} activado \\
+        Intérprete de órdenes por defecto & \texttt{bash} & \texttt{fish} \\
+        \bottomrule
+    \end{tabularx}
+    \caption{Comparativa de los equipos anfitriones}
+    \label{tab:anfitriones}
+\end{table}
+
+Tener dos anfitriones distintos permite comprobar que el despliegue no depende de una distribución concreta: los pasos realizados dentro de la máquina virtual son los mismos en ambos casos, y solo cambian la instalación de paquetes y la configuración de red del anfitrión.
+
+% --------------------------------------------------
+\subsection{Requisitos del equipo anfitrión}
+
+La máquina virtual se ejecuta sobre el hipervisor Qemu/KVM, que requiere que el procesador del anfitrión disponga de virtualización por hardware (Intel VT-x o AMD-V) activada en la BIOS. Además, cada anfitrión debe contar con unos 8\,GB de RAM libres, para poder asignar 4\,GB a la máquina virtual, y unos 50\,GB de espacio en disco.
+
+El soporte de virtualización se comprueba con el siguiente comando, válido en ambos anfitriones:
+
+\begin{lstlisting}[language=bash]
+grep -Ec '(vmx|svm)' /proc/cpuinfo
+\end{lstlisting}
+
+Un resultado mayor que \texttt{0} indica que el procesador admite virtualización. Si el resultado es \texttt{0}, es necesario activarla en la BIOS. Se utiliza \texttt{grep -E} en lugar de \texttt{egrep}, ya que este último está obsoleto y muestra un aviso en las versiones recientes de \texttt{grep}. Cabe señalar que Qemu/KVM no se ejecuta de forma nativa en Windows ni en macOS; en esos casos sería necesario recurrir a una máquina Linux intermedia.
+
+% --------------------------------------------------
+\subsection{Instalación del hipervisor Qemu/KVM}
+
+En cada anfitrión se instalan Qemu/KVM y las herramientas de gestión de libvirt con su gestor de paquetes, y se añade el usuario a los grupos \texttt{libvirt} y \texttt{kvm} para que pueda administrar máquinas virtuales sin privilegios de superusuario.
+
+\subsubsection{Anfitrión Debian}
+
+\begin{lstlisting}[language=bash]
+sudo apt update
+sudo apt install qemu-system-x86 qemu-utils libvirt-daemon-system libvirt-clients virtinst virt-manager
+sudo usermod -aG libvirt,kvm $USER
+\end{lstlisting}
+
+En Debian, el paquete \texttt{libvirt-daemon-system} habilita e inicia el servicio \texttt{libvirtd} automáticamente. La Figura~\ref{fig:debian-kvm-1} muestra la instalación de los paquetes y la Figura~\ref{fig:debian-kvm-2}, la incorporación del usuario a los grupos.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{installqemukvm.png}
+    \caption{Instalación de Qemu/KVM y libvirt en el anfitrión Debian}
+    \label{fig:debian-kvm-1}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.65\textwidth]{installqemukvm2.png}
+    \caption{Usuario añadido a los grupos libvirt y kvm en el anfitrión Debian}
+    \label{fig:debian-kvm-2}
+\end{figure}
+
+\subsubsection{Anfitrión CachyOS}
+
+\begin{lstlisting}[language=bash]
+sudo pacman -S --needed qemu-desktop libvirt virt-install virt-manager dnsmasq
+sudo systemctl enable --now libvirtd.service
+sudo usermod -aG libvirt,kvm $USER
+\end{lstlisting}
+
+A diferencia de Debian, en las distribuciones basadas en Arch los servicios no se activan al instalarlos, por lo que \texttt{libvirtd} se habilita manualmente. El paquete \texttt{dnsmasq} es necesario para que funcione la red NAT por defecto de libvirt, que proporciona DHCP y DNS a las máquinas virtuales.
+
+\subsubsection{Configuración común}
+
+Para que la pertenencia a los nuevos grupos tenga efecto es necesario cerrar sesión y volver a iniciarla.
+
+Por defecto, \texttt{virsh} ejecutado sin \texttt{sudo} se conecta a la instancia de sesión del usuario (\texttt{qemu:///session}) y no a la del sistema, donde se crea la máquina virtual. Para que todos los comandos \texttt{virsh} de este documento actúen sobre la misma instancia, se define la conexión por defecto. La sintaxis depende del intérprete de órdenes de cada anfitrión:
+
+\begin{lstlisting}[language=bash]
+# Debian (bash)
+echo 'export LIBVIRT_DEFAULT_URI=qemu:///system' >> ~/.bashrc
+
+# CachyOS (fish)
+set -Ux LIBVIRT_DEFAULT_URI qemu:///system
+\end{lstlisting}
+
+\begin{cabezazo}{\texttt{virsh} no encuentra la máquina virtual}{cab:virsh}
+\problema Antes de definir esta variable, \cmd{virsh shutdown delfos} respondía
+«error: incorrecto al obtener dominio 'delfos'», aunque la máquina existía.
+
+\causa La máquina se creó con \cmd{virt-install --connect qemu:///system}, pero
+\cmd{virsh} sin \cmd{sudo} se conecta a la instancia de sesión del usuario
+(\cmd{qemu:///session}), que no la ve.
+
+\solucion Indicar la conexión (\cmd{virsh -c qemu:///system ...}) o fijarla por
+defecto con \texttt{LIBVIRT\_DEFAULT\_URI}, como se ha hecho arriba.
+\end{cabezazo}
+
+A continuación se activa la red virtual \texttt{default} de libvirt y se marca para que arranque automáticamente. Si ya estaba activa, el primer comando lo indica y puede ignorarse:
+
+\begin{lstlisting}[language=bash]
+sudo virsh net-start default
+sudo virsh net-autostart default
+\end{lstlisting}
+
+Por último, se verifica la instalación en ambos anfitriones:
+
+\begin{lstlisting}[language=bash]
+virt-host-validate qemu
+systemctl status libvirtd
+virsh net-list --all
+virsh list --all
+\end{lstlisting}
+
+La herramienta \texttt{virt-host-validate}, incluida en libvirt, sustituye a \texttt{kvm-ok}, que forma parte del paquete \texttt{cpu-checker} de Ubuntu y no está disponible en CachyOS. Las comprobaciones \textit{hardware virtualization} y \texttt{/dev/kvm} deben mostrar \texttt{PASS}; los avisos (\texttt{WARN}) relativos a IOMMU o a cifrado de invitados no afectan a este proyecto. El servicio \texttt{libvirtd} debe encontrarse activo y la red \texttt{default}, en estado activo y con inicio automático.
+
+\captura{verificacionlibvirt.png}{Servicio \texttt{libvirtd} activo en el anfitrión CachyOS, con \texttt{dnsmasq} dando servicio a la red \texttt{default}}{fig:libvirt}
+
+% --------------------------------------------------
+\subsection{Obtención de Ubuntu Server LTS}
+
+Como sistema operativo del servidor se ha elegido la última versión LTS (\textit{Long Term Support}) de Ubuntu Server en ambos anfitriones, por ofrecer soporte y actualizaciones de seguridad a largo plazo, algo deseable en un servidor de bases de datos. La imagen ISO se descarga desde la web oficial, \url{https://ubuntu.com/download/server}, y se guarda en el directorio \texttt{\textasciitilde/isos/}.
+
+Antes de utilizarla se verifica su integridad, comparando el resumen SHA-256 con el publicado por Canonical:
+
+\begin{lstlisting}[language=bash]
+sha256sum ubuntu-*.iso
+\end{lstlisting}
+
+Esta comprobación garantiza que la imagen no se ha corrompido durante la descarga ni ha sido alterada. También puede hacerse de forma automática pasando el hash oficial a \texttt{shasum --check}, que responde \texttt{OK} si coincide (Figura~\ref{fig:iso}).
+
+\captura{verificacioniso.png}{Verificación del SHA-256 de \texttt{ubuntu-26.04.1-live-server-amd64.iso}}{fig:iso}
+
+Una vez verificada, la imagen se copia al directorio de imágenes de libvirt. El proceso de Qemu se ejecuta con un usuario propio del sistema que, en CachyOS, no tiene permiso para leer el directorio personal del usuario, de modo que conviene ubicar la ISO en una ruta común a ambos anfitriones:
+
+\begin{lstlisting}[language=bash]
+sudo cp ~/isos/ubuntu-26.04-live-server-amd64.iso /var/lib/libvirt/images/
+\end{lstlisting}
+
+% --------------------------------------------------
+\subsection{Diseño de la red}
+
+Uno de los requisitos del proyecto es poder conectarse al servidor como administrador de forma remota y mediante un cliente Oracle desde otra máquina. Por ello, la elección del modo de red de la máquina virtual condiciona el resto del despliegue. La Tabla~\ref{tab:red} recoge las dos alternativas valoradas.
+
+\begin{table}[!htbp]
+    \centering
+    \begin{tabularx}{\textwidth}{L{3.5cm} Y Y}
+        \toprule
+        \textbf{Modo} & \textbf{Ventaja} & \textbf{Inconveniente} \\
+        \midrule
+        NAT (por defecto en libvirt) & Funciona en cualquier situación, sin configuración adicional. & Solo el anfitrión ve la VM; el acceso desde otras máquinas requiere reenvío de puertos. \\
+        \addlinespace
+        Puente (\textit{bridge}) & La VM obtiene una IP propia en la red local y es accesible como un equipo más. & No funciona sobre Wi-Fi; requiere conexión cableada. \\
+        \bottomrule
+    \end{tabularx}
+    \caption{Comparativa de los modos de red de la máquina virtual}
+    \label{tab:red}
+\end{table}
+
+Con NAT, el acceso remoto se consigue reenviando los puertos 22 (SSH) y 1521 (\textit{listener} de Oracle) del anfitrión hacia la máquina virtual mediante reglas de \texttt{iptables} o \texttt{nftables}.
+
+Con el modo puente, en cambio, se crea la interfaz \texttt{br0} en el anfitrión y la máquina virtual queda conectada directamente a la red local. Ninguno de los dos anfitriones utiliza netplan, por lo que el puente se crea con NetworkManager mediante \texttt{nmcli}, disponible por defecto en CachyOS y en Debian con entorno de escritorio. El nombre de la interfaz física (\texttt{enp56s0} en este caso) y el de la conexión cableada original se consultan antes con \texttt{nmcli device} y \texttt{nmcli connection show}:
+
+\begin{lstlisting}[language=bash]
+sudo nmcli connection add type bridge ifname br0 con-name br0 bridge.stp no
+sudo nmcli connection add type bridge-slave ifname enp56s0 master br0
+sudo nmcli connection down "Conexión cableada 1"
+sudo nmcli connection up br0
+\end{lstlisting}
+
+En un anfitrión Debian sin NetworkManager, el puente se define en \texttt{/etc/network/interfaces}, tras instalar el paquete \texttt{bridge-utils} y eliminar la configuración propia de la interfaz física:
+
+\begin{lstlisting}
+auto br0
+iface br0 inet dhcp
+    bridge_ports enp56s0
+    bridge_stp off
+\end{lstlisting}
+
+Además, el anfitrión CachyOS tiene \texttt{ufw} activado por defecto, que puede bloquear el tráfico reenviado de las máquinas virtuales en modo NAT. En ese caso se permite el tráfico de la interfaz virtual de libvirt:
+
+\begin{lstlisting}[language=bash]
+sudo ufw allow in on virbr0
+sudo ufw route allow in on virbr0
+sudo ufw route allow out on virbr0
+\end{lstlisting}
+
+En nuestro caso se ha optado por el modo \textbf{puente}, ya que el anfitrión está conectado por cable a la red local y así la máquina virtual es accesible directamente desde cualquier equipo de la red, sin reglas de reenvío, lo que simplifica la conexión remota con el cliente Oracle que exige el proyecto. Esta decisión se ha tomado al comienzo del proyecto, puesto que modificar la red una vez configurado el servidor obligaría a rehacer parte de la configuración.
+
+% --------------------------------------------------
+\subsection{Creación de la máquina virtual}
+
+La máquina virtual se crea con \texttt{virt-install}, con el mismo comando en ambos anfitriones. El siguiente corresponde a la configuración con el puente \texttt{br0}; en el caso de NAT, la opción \texttt{--network} toma el valor \texttt{network=default}:
+
+\begin{lstlisting}[language=bash]
+sudo virt-install \
+  --name delfos \
+  --memory 4096 \
+  --vcpus 2 \
+  --cpu host-passthrough \
+  --disk size=40,format=qcow2,bus=virtio \
+  --cdrom /var/lib/libvirt/images/ubuntu-26.04-live-server-amd64.iso \
+  --os-variant ubuntu24.04 \
+  --network bridge=br0,model=virtio \
+  --graphics spice
+\end{lstlisting}
+
+\begin{cabezazo}{\texttt{virt-install}: «No existe el dispositivo» \texttt{br0}}{cab:br0}
+\problema La creación de la máquina virtual falla con «No se puede obtener MTU
+del interfaz en 'br0': No existe el dispositivo» (Figura~\ref{fig:br0err}).
+
+\causa Primero, el puente \cmd{br0} no existía en el anfitrión. Después de
+crearlo con \cmd{nmcli connection add}, el error se repitió porque las conexiones
+\cmd{br0} y \cmd{br0-slave} estaban \emph{definidas} pero no \emph{activadas}:
+en \cmd{nmcli con show} no tenían dispositivo asociado.
+
+\solucion Activar el puente en una sola orden, para no quedarse sin red a
+mitad del cambio, y comprobar con \cmd{ip -br link} que \cmd{br0} existe antes
+de repetir \cmd{virt-install} (Figura~\ref{fig:br0ok}):
+
+\begin{lstlisting}[language=bash]
+sudo nmcli con down "Conexión cableada 1"; sudo nmcli con up br0-slave; sudo nmcli con up br0
+sudo nmcli con modify "Conexión cableada 1" connection.autoconnect no
+\end{lstlisting}
+\end{cabezazo}
+
+\captura[0.7\textwidth]{cabezazovirt.png}{\texttt{virt-install} falla porque \texttt{br0} no existe}{fig:br0err}
+\captura{solcabezazovirt.png}{Con el puente activado, \texttt{virt-install} crea el dominio y abre la consola}{fig:br0ok}
+
+Los recursos asignados se justifican de la siguiente manera:
+
+\begin{itemize}
+    \item \textbf{Memoria (4\,GB) y CPU (2 núcleos):} Oracle XE limita su instancia a un máximo de 2 CPU y 2\,GB de RAM, por lo que estos valores cubren sus necesidades y dejan margen al sistema operativo.
+    \item \textbf{Disco (40\,GB, formato qcow2):} el software de Oracle XE ocupa entre 6 y 7\,GB, y la base de datos y los ficheros de log crecen con el uso. El formato qcow2 reserva el espacio de forma dinámica y permite crear snapshots.
+    \item \textbf{Controladores virtio:} tanto el disco como la interfaz de red usan controladores paravirtualizados, que ofrecen mejor rendimiento que los dispositivos emulados.
+\end{itemize}
+
+Los valores admitidos por \texttt{--os-variant} dependen de la base de datos \texttt{osinfo-db} instalada, que suele ser más reciente en CachyOS que en Debian. Si la versión de Ubuntu no figura en la lista, que se consulta con \texttt{virt-install --osinfo list}, se utiliza la versión más próxima.
+
+% --------------------------------------------------
+\subsection{Instalación de Ubuntu Server}
+
+Durante la instalación del sistema operativo se seleccionaron las siguientes opciones:
+
+\begin{itemize}
+    \item \textbf{Idioma y teclado:} español.
+    \item \textbf{Tipo de instalación:} Ubuntu Server estándar, no minimizada, para disponer de las herramientas habituales de administración.
+    \item \textbf{Red:} configuración por DHCP; la IP fija se establece tras la instalación.
+    \item \textbf{Almacenamiento:} disco completo con LVM y los valores por defecto, lo que facilita ampliar los volúmenes más adelante. Conviene observar que, por defecto, el instalador solo asigna 19\,GB al volumen raíz y deja otros 19\,GB libres en el grupo de volúmenes (Figura~\ref{fig:disco}); esto provocó el cabezazo~\ref{cab:disco} del Apartado~\ref{sec:apartado2}.
+    \item \textbf{Perfil:} nombre de equipo \texttt{delfos} y un usuario administrador (\texttt{sercal}). Las credenciales se custodian en un gestor de contraseñas y no se incluyen en el repositorio.
+    \item \textbf{SSH:} se instala el servidor OpenSSH para la administración remota.
+    \item \textbf{Paquetes adicionales:} no se instala ningún snap adicional, para mantener el sistema lo más limpio posible.
+\end{itemize}
+
+\captura{configred.png}{Red: la interfaz \texttt{enp1s0} obtiene por DHCP la dirección 192.168.3.133/24 de la red local}{fig:instred}
+\captura[0.75\textwidth]{configdisc.png}{Almacenamiento: LVM con 19\,GB para la raíz y 19\,GB libres en \texttt{ubuntu-vg}}{fig:disco}
+\captura{configuser.png}{Perfil: servidor \texttt{delfos} y usuario administrador \texttt{sercal}}{fig:instuser}
+\captura{configssh.png}{Instalación del servidor OpenSSH}{fig:instssh}
+
+Finalizada la instalación, se reinicia la máquina y se retira la imagen ISO.
+
+% --------------------------------------------------
+\subsection{Configuración inicial del sistema}
+
+A partir de este punto, la administración se realiza por SSH desde el anfitrión con \texttt{ssh sercal@192.168.3.133}, tras consultar la dirección asignada con \texttt{ip a}. Todos los pasos siguientes se ejecutan dentro de la máquina virtual y son idénticos en ambos anfitriones.
+
+\captura[0.7\textwidth]{sercalcon.png}{Primera conexión por SSH a la máquina virtual}{fig:ssh}
+
+\subsubsection{Actualización del sistema}
+
+En primer lugar se instalan todas las actualizaciones disponibles y se reinicia el sistema:
+
+\begin{lstlisting}[language=bash]
+sudo apt update && sudo apt full-upgrade -y
+sudo reboot
+\end{lstlisting}
+
+\subsubsection{Dirección IP fija}
+
+Un servidor de bases de datos debe mantener siempre la misma dirección, ya que los clientes se conectan a ella. Para fijarla se edita el fichero de netplan, que se encuentra en \texttt{/etc/netplan/}. Su nombre puede variar; en nuestro caso es \texttt{00-installer-config.yaml}:
+
+\begin{lstlisting}
+network:
+  version: 2
+  ethernets:
+    enp1s0:
+      dhcp4: false
+      addresses: [192.168.3.133/24]
+      routes:
+        - to: default
+          via: 192.168.3.1
+      nameservers:
+        addresses: [1.1.1.1, 8.8.8.8]
+\end{lstlisting}
+
+El fichero generado por el instalador incluye además un bloque \texttt{match} por dirección MAC con \texttt{set-name}, que se conserva tal cual. Antes de editarlo se consulta la red actual con \texttt{ip -br a} e \texttt{ip route} y se guarda una copia de seguridad (Figura~\ref{fig:netplanprev}).
+
+\captura[0.8\textwidth]{ipfija.png}{Configuración DHCP original, dirección y puerta de enlace actuales, y copia de seguridad}{fig:netplanprev}
+
+Los cambios se aplican con \texttt{sudo netplan try}, que revierte la configuración automáticamente a los 120 segundos si no se confirma, de modo que un error no deja la máquina incomunicada. Una vez comprobado, la configuración queda aplicada de forma permanente. La dirección elegida está libre en la red y fuera del rango que reparte el servidor DHCP del router, para evitar conflictos. Si cada miembro del grupo trabaja en una red distinta, la dirección, la puerta de enlace y la máscara se adaptan a la red de cada anfitrión.
+
+\begin{cabezazo}{\texttt{netplan try} revierte la IP fija}{cab:netplan}
+\problema Tras el primer \cmd{sudo netplan try} la máquina pierde la conexión y
+netplan termina con «Reverting» (Figura~\ref{fig:netplanrev}).
+
+\causa Se copió una configuración de ejemplo con la dirección
+\cmd{192.168.1.50/24} y la puerta de enlace \cmd{192.168.1.1}
+(Figura~\ref{fig:netplanmal}), pero la red real es \cmd{192.168.3.0/24}, con
+puerta de enlace \cmd{192.168.3.1}.
+
+\solucion Usar los valores reales obtenidos con \cmd{ip -br a} e
+\cmd{ip route | grep default}: \cmd{192.168.3.133/24} y \cmd{192.168.3.1}
+(Figura~\ref{fig:netplanok}). Gracias a \cmd{netplan try}, el error se
+deshizo solo sin necesidad de acceder por consola.
+\end{cabezazo}
+
+\captura[0.45\textwidth]{netplanconfig.png}{Configuración errónea: dirección y puerta de enlace de otra red}{fig:netplanmal}
+\captura[0.75\textwidth]{ipfija2.png}{El primer \texttt{netplan try} se revierte; el segundo se acepta}{fig:netplanrev}
+\captura[0.45\textwidth]{cabezazoipsol.png}{Configuración correcta de la IP fija}{fig:netplanok}
+
+\subsubsection{Nombre completo del equipo}
+
+Oracle utiliza el nombre completo del equipo (FQDN) durante su configuración, por lo que se asocia la IP fija al nombre \texttt{delfos.inf} en el fichero \texttt{/etc/hosts}:
+
+\begin{lstlisting}
+192.168.3.133   delfos.inf delfos
+\end{lstlisting}
+
+A continuación se comprueba que \texttt{hostname -f} devuelve \texttt{delfos.inf}. En caso contrario, se establece con:
+
+\begin{lstlisting}[language=bash]
+sudo hostnamectl set-hostname delfos.inf
+\end{lstlisting}
+
+La misma línea se añade al fichero \texttt{/etc/hosts} de cada anfitrión, de modo que el servidor sea accesible por su nombre. Este fichero tiene el mismo formato en Debian y en CachyOS.
+
+\captura[0.7\textwidth]{host.png}{El anfitrión resuelve \texttt{delfos.inf} a 192.168.3.133}{fig:hosts}
+
+\subsubsection{Zona horaria}
+
+Se configura la zona horaria de Madrid para que las marcas de tiempo de los logs y de la base de datos sean coherentes:
+
+\begin{lstlisting}[language=bash]
+sudo timedatectl set-timezone Europe/Madrid
+\end{lstlisting}
+
+\subsubsection{Memoria de intercambio}
+
+Oracle requiere al menos 2\,GB de memoria de intercambio. Tras comprobar el espacio disponible con \texttt{free -h}, y al ser inferior a ese valor, se crea un fichero de intercambio y se registra en \texttt{/etc/fstab} para que se active en cada arranque:
+
+\begin{lstlisting}[language=bash]
+sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile
+sudo mkswap /swapfile && sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+\end{lstlisting}
+
+\subsubsection{Cortafuegos}
+
+Siguiendo el principio de mínima exposición, el cortafuegos se activa permitiendo únicamente el acceso por SSH. El puerto 1521 se abrirá más adelante, una vez configurado el \textit{listener} de Oracle.
+
+\begin{lstlisting}[language=bash]
+sudo ufw allow OpenSSH && sudo ufw enable
+\end{lstlisting}
+
+% --------------------------------------------------
+\subsection{Preparación de la arquitectura OFA}
+
+OFA (\textit{Optimal Flexible Architecture}) es el estándar de Oracle para organizar los usuarios, los grupos y los directorios de una instalación, con el fin de facilitar su mantenimiento y la convivencia de varias versiones. En las distribuciones soportadas oficialmente, Oracle proporciona un paquete \textit{preinstall} que realiza esta preparación de forma automática; al no existir para Ubuntu, se ha llevado a cabo manualmente.
+
+\begin{cabezazo}{No existe el paquete \textit{preinstall} para Ubuntu}{cab:preinstall}
+\problema Ubuntu no dispone de \cmd{oracle-database-preinstall-21c}, y el
+directorio \cmd{/etc/sysctl.d} solo contiene un \cmd{README.sysctl}.
+
+\causa Oracle solo publica ese paquete para Oracle Linux y Red Hat.
+
+\solucion Crear a mano todo lo que el paquete haría: grupos, usuario
+\cmd{oracle}, directorios OFA, \cmd{/etc/sysctl.d/99-oracle.conf},
+\cmd{/etc/security/limits.d/oracle.conf} y variables de entorno, como se
+describe a continuación.
+\end{cabezazo}
+
+\subsubsection{Grupos y usuario}
+
+Se crean los grupos del sistema que define Oracle (\texttt{oinstall} para la instalación, \texttt{dba} para la administración y \texttt{oper} para las operaciones básicas) y el usuario \texttt{oracle}, propietario del software:
+
+\begin{lstlisting}[language=bash]
+sudo groupadd -g 54321 oinstall
+sudo groupadd -g 54322 dba
+sudo groupadd -g 54323 oper
+sudo useradd -u 54321 -g oinstall -G dba,oper -m -s /bin/bash oracle
+sudo passwd oracle
+\end{lstlisting}
+
+Se utilizan los identificadores 54321--54323, que son los que Oracle emplea por defecto en sus propios sistemas.
+
+\subsubsection{Dependencias}
+
+Se instalan las bibliotecas y herramientas que necesita el instalador de Oracle:
+
+\begin{lstlisting}[language=bash]
+sudo apt install -y libaio1t64 bc alien unixodbc net-tools ksh make gcc binutils
+\end{lstlisting}
+
+El paquete \texttt{alien} permite convertir el instalador de Oracle, distribuido en formato RPM, a un paquete instalable en Ubuntu. En versiones anteriores de Ubuntu, la biblioteca \texttt{libaio1t64} recibe el nombre de \texttt{libaio1}.
+
+\captura{prepofa1.png}{Creación de grupos y usuario \texttt{oracle} e instalación de dependencias}{fig:ofa}
+
+\subsubsection{Estructura de directorios}
+
+Se crea la jerarquía de directorios OFA y se asigna su propiedad al usuario \texttt{oracle} y al grupo \texttt{oinstall}:
+
+\begin{lstlisting}[language=bash]
+sudo mkdir -p /opt/oracle/product/21c/dbhomeXE
+sudo mkdir -p /opt/oracle/oradata
+sudo mkdir -p /opt/oracle/admin
+sudo mkdir -p /opt/oraInventory
+sudo chown -R oracle:oinstall /opt/oracle /opt/oraInventory
+sudo chmod -R 775 /opt/oracle /opt/oraInventory
+\end{lstlisting}
+
+La Tabla~\ref{tab:ofa} describe la función de cada directorio.
+
+\begin{table}[!htbp]
+    \centering
+    \begin{tabularx}{\textwidth}{L{7cm} Y}
+        \toprule
+        \textbf{Directorio} & \textbf{Función} \\
+        \midrule
+        \texttt{/opt/oracle} & Directorio base de Oracle (\texttt{ORACLE\_BASE}). \\
+        \texttt{/opt/oracle/product/21c/dbhomeXE} & Directorio del software (\texttt{ORACLE\_HOME}). \\
+        \texttt{/opt/oracle/oradata} & Ficheros de datos de la base de datos. \\
+        \texttt{/opt/oracle/admin} & Ficheros de administración y diagnóstico. \\
+        \texttt{/opt/oraInventory} & Inventario central de productos Oracle instalados. \\
+        \bottomrule
+    \end{tabularx}
+    \caption{Estructura de directorios OFA}
+    \label{tab:ofa}
+\end{table}
+
+\subsubsection{Parámetros del kernel}
+
+Oracle necesita ajustar varios parámetros del kernel relacionados con la memoria compartida, los semáforos, el número de ficheros abiertos y la red. Se definen en el fichero \path{/etc/sysctl.d/99-oracle.conf}:
+
+\begin{lstlisting}
+fs.file-max = 6815744
+kernel.sem = 250 32000 100 128
+kernel.shmmni = 4096
+kernel.shmall = 1073741824
+kernel.shmmax = 4398046511104
+net.core.rmem_default = 262144
+net.core.rmem_max = 4194304
+net.core.wmem_default = 262144
+net.core.wmem_max = 1048576
+fs.aio-max-nr = 1048576
+net.ipv4.ip_local_port_range = 9000 65500
+\end{lstlisting}
+
+Los valores se cargan sin necesidad de reiniciar con \texttt{sudo sysctl --system}.
+
+\captura[0.6\textwidth]{configoracle.png}{Fichero \texttt{/etc/sysctl.d/99-oracle.conf}}{fig:sysctl}
+
+\subsubsection{Límites de recursos del usuario oracle}
+
+Se amplían los límites de ficheros abiertos, procesos y tamaño de pila del usuario \texttt{oracle} en el fichero \texttt{/etc/security/limits.d/oracle.conf}:
+
+\begin{lstlisting}
+oracle soft nofile 1024
+oracle hard nofile 65536
+oracle soft nproc 16384
+oracle hard nproc 16384
+oracle soft stack 10240
+oracle hard stack 32768
+\end{lstlisting}
+
+\captura[0.6\textwidth]{limitsconfig.png}{Fichero \texttt{/etc/security/limits.d/oracle.conf}}{fig:limits}
+
+\subsubsection{Variables de entorno}
+
+Por último, se definen las variables de entorno de Oracle al final del fichero \path{/home/oracle/.bash_profile}, de forma que estén disponibles en cada inicio de sesión del usuario:
+
+\begin{lstlisting}[language=bash]
+export ORACLE_BASE=/opt/oracle
+export ORACLE_HOME=$ORACLE_BASE/product/21c/dbhomeXE
+export ORACLE_SID=XE
+export PATH=$ORACLE_HOME/bin:$PATH
+export LD_LIBRARY_PATH=$ORACLE_HOME/lib
+export NLS_LANG=SPANISH_SPAIN.AL32UTF8
+\end{lstlisting}
+
+La variable \texttt{NLS\_LANG} establece el idioma español y la codificación UTF-8 en el cliente, lo que evita problemas con los acentos y caracteres especiales.
+
+\captura[0.6\textwidth]{bashprofile.png}{Variables de entorno en \texttt{/home/oracle/.bash\_profile}}{fig:bashprofile}
+
+% --------------------------------------------------
+\subsection{Snapshot del estado preparado}
+
+Con el sistema ya preparado y antes de instalar Oracle, se crea un snapshot de la máquina virtual. De este modo, si se produce algún error durante la instalación, es posible restaurar este estado en lugar de repetir todo el proceso. El snapshot se crea desde el anfitrión con la máquina apagada; los comandos son los mismos en Debian y en CachyOS gracias a la variable \texttt{LIBVIRT\_DEFAULT\_URI} definida anteriormente:
+
+\begin{lstlisting}[language=bash]
+virsh shutdown delfos
+virsh snapshot-create-as delfos --name "s1-preparada-pre-oracle" --description "Ubuntu + OFA, sin Oracle"
+virsh snapshot-list delfos
+\end{lstlisting}
+
+En caso necesario, la restauración se realiza con:
+
+\begin{lstlisting}[language=bash]
+virsh snapshot-revert delfos s1-preparada-pre-oracle
+\end{lstlisting}
+
+Dado que se trata de snapshots internos del formato qcow2, no deben combinarse con copias manuales del fichero de disco, ya que podrían quedar en un estado inconsistente.
+
+\captura[0.75\textwidth]{snap1.png}{Máquina apagada e instantánea \texttt{s1-preparada-pre-oracle} creada}{fig:snap1}
+
+% --------------------------------------------------
+\subsection{Verificación}
+
+Para dar por concluido el apartado se han realizado en ambos anfitriones las comprobaciones de la Tabla~\ref{tab:verif1}, todas ellas con resultado satisfactorio.
+
+\begin{table}[!htbp]
+    \centering
+    \small
+    \begin{tabularx}{\textwidth}{L{3.6cm} L{4.6cm} Y}
+        \toprule
+        \textbf{Comprobación} & \textbf{Comando} & \textbf{Resultado esperado} \\
+        \midrule
+        Virtualización del anfitrión & \texttt{virt-host-validate qemu} & \texttt{PASS} en virtualización por hardware y \texttt{/dev/kvm} \\
+        Servicio libvirt & \texttt{systemctl status libvirtd} & Activo \\
+        Red de libvirt & \texttt{virsh net-list --all} & Red \texttt{default} activa y con inicio automático \\
+        Integridad de la ISO & \texttt{sha256sum} & Coincide con el hash oficial \\
+        Acceso remoto & \texttt{ssh sercal\,@\,delfos.inf} & Sesión iniciada correctamente \\
+        Nombre del equipo & \texttt{hostname -f} & \texttt{delfos.inf} \\
+        Memoria swap & \texttt{free -h} & Swap $\geq$ 2\,GB \\
+        Usuario y grupos & \texttt{id oracle} & Grupos \texttt{oinstall}, \texttt{dba} y \texttt{oper} \\
+        Directorios OFA & \texttt{ls -l /opt/oracle} & Propietario \texttt{oracle:oinstall} \\
+        Parámetros del kernel & \texttt{sysctl fs.aio-max-nr} & \texttt{1048576} \\
+        Límites de recursos & \texttt{ulimit -Hn} (como \texttt{oracle}) & \texttt{65536} \\
+        Variables de entorno & \texttt{echo \$ORACLE\_HOME} & Ruta de \texttt{dbhomeXE} \\
+        Snapshot & \texttt{virsh snapshot-list delfos} & Aparece \texttt{s1-preparada-pre-oracle} \\
+        \bottomrule
+    \end{tabularx}
+    \caption{Comprobaciones del Apartado 1}
+    \label{tab:verif1}
+\end{table}
+
+Los comandos ejecutados se han recogido en el script \path{scripts/01-preparar-ubuntu.sh}, y los ficheros de configuración de netplan, sysctl y límites se encuentran en la carpeta \texttt{config/} del repositorio.
+
+% ==================== APARTADO 2 ====================
+\newpage
+\section{Instalación de Oracle XE 21c y creación de BAHIA.inf}
+\label{sec:apartado2}
+
+% --------------------------------------------------
+\subsection{Objetivos}
+
+Sobre el servidor preparado en el Apartado~1 se instala Oracle Database 21c Express Edition y se crea la base de datos que pide el enunciado. Al finalizar este apartado, el entorno debe cumplir las siguientes condiciones:
+
+\begin{itemize}
+    \item Oracle Database 21c XE está instalado en el \texttt{ORACLE\_HOME} definido según OFA.
+    \item Existe la base de datos \texttt{BAHIA.inf}, con SID \texttt{XE}, juego de caracteres \texttt{AL32UTF8} y bloque de 8\,KB.
+    \item Se conservan los scripts de creación generados por DBCA.
+    \item Están instalados los esquemas de ejemplo.
+    \item La base de datos y el \textit{listener} arrancan automáticamente con el sistema.
+\end{itemize}
+
+La Tabla~\ref{tab:bahia} resume la configuración final.
+
+\begin{table}[H]
+\centering\small
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Parámetro} & \textbf{Valor} \\
+\midrule
+Software & Oracle Database 21c XE (21.3.0.0.0) \\
+\texttt{ORACLE\_BASE} / \texttt{ORACLE\_HOME} & \cmd{/opt/oracle} / \cmd{/opt/oracle/product/21c/dbhomeXE} \\
+Nombre global & \cmd{BAHIA.inf} (\cmd{db_name=BAHIA}, \cmd{db_domain=inf}) \\
+SID & \cmd{XE} \\
+Juego de caracteres & \cmd{AL32UTF8} (nacional \cmd{AL16UTF16}) \\
+Tamaño de bloque & 8192 bytes (8 KB) \\
+Arquitectura & CDB con una PDB: \cmd{BAHIAPDB} \\
+Ficheros de datos & \cmd{/opt/oracle/oradata} \\
+Memoria & SGA automática, 1536 MB \\
+Esquemas de ejemplo & \cmd{HR} en \cmd{BAHIAPDB} \\
+\bottomrule
+\end{tabular}
+\caption{Resumen de la configuración de BAHIA.inf}
+\label{tab:bahia}
+\end{table}
+
+Como regla de trabajo durante toda la fase: \textbf{lo que necesita
+\cmd{sudo} se hace con el usuario administrador \cmd{sercal}; lo propio de Oracle
+(\cmd{sqlplus}, \cmd{lsnrctl}, \cmd{dbca}) con el usuario \cmd{oracle}}, que no
+tiene privilegios de administración.
+
+% ---------------------------------------------------------------------
+\subsection{Descarga y verificación del software}
+\label{sec:descarga}
+
+El paquete se descarga de la web de Oracle (se necesita una cuenta gratuita).
+Para Linux solo se distribuye como RPM para Oracle Linux 8; es la versión
+\emph{XE} más reciente (la siguiente generación, 23ai, se distribuye como
+\emph{Oracle Database Free} y no permite crear la base de datos con DBCA como
+pide el enunciado).
+
+\captura{oraclexedwnld.png}{Página de descarga de Oracle Database 21c XE}{fig:descarga}
+
+Se comprueba la integridad del fichero comparando su SHA-256 con el publicado por
+Oracle:
+
+\begin{lstlisting}[style=bash]
+sha256sum oracle-database-xe-21c-1.0-1.ol8.x86_64.rpm
+# f8357b432de33478549a76557e8c5220ec243710ed86115c65b0c2bc00a848db
+\end{lstlisting}
+
+\captura{sha256oracle.png}{El hash calculado coincide con el publicado por Oracle}{fig:sha256}
+
+El RPM se copia a la máquina virtual desde el anfitrión:
+
+\begin{lstlisting}[style=bash]
+scp oracle-database-xe-21c-1.0-1.ol8.x86_64.rpm sercal@delfos.inf:~/
+\end{lstlisting}
+
+\captura{scporacle.png}{Copia del paquete (2,2 GB) a \texttt{delfos.inf}}{fig:scp}
+
+% ---------------------------------------------------------------------
+\subsection{Conversión del RPM a paquete Debian}
+\label{sec:alien}
+
+Ubuntu usa paquetes \cmd{.deb}, así que el RPM se convierte con \cmd{alien}
+conservando los scripts de instalación (\cmd{--scripts}):
+
+\begin{lstlisting}[style=bash]
+sudo alien --scripts -d oracle-database-xe-21c-1.0-1.ol8.x86_64.rpm
+\end{lstlisting}
+
+Los avisos \cmd{NOKEY} que aparecen repetidos solo indican que la clave GPG de
+Oracle no está importada en el sistema; no son errores.
+
+\captura{alien.png}{Primer intento de conversión con \texttt{alien}}{fig:alien}
+
+La conversión resultó ser el paso más delicado por falta de espacio, primero en
+el disco y después en \cmd{/tmp}.
+
+\begin{cabezazo}{\texttt{alien} falla con «No space left on device»}{cab:disco}
+\problema La conversión aborta copiando las librerías de
+\cmd{dbhomeXE/lib} con \cmd{cp: error copying ... No space left on device} y
+\cmd{make: *** [debian/rules:7: binary] Error 2}.
+
+\causa \cmd{alien} descomprime el RPM y lo vuelve a copiar a
+\cmd{debian/} antes de empaquetar, por lo que necesita unos 20 GB libres. El
+instalador de Ubuntu Server solo asignó 19 GB al volumen lógico raíz
+(\cmd{ubuntu-lv}) y dejó otros 19 GB libres en el grupo de volúmenes:
+
+\begin{lstlisting}[style=fichero]
+/dev/mapper/ubuntu--vg-ubuntu--lv   19G  9,6G  8,0G  55% /
+  VG        #PV #LV #SN Attr   VSize   VFree
+  ubuntu-vg   1   1   0 wz--n- <38,00g 19,00g
+\end{lstlisting}
+
+\solucion Primero se asigna al volumen raíz el espacio libre del grupo y,
+para tener margen para la base de datos, se amplía además el disco virtual en
+30 GB desde el anfitrión:
+
+\begin{lstlisting}[style=bash]
+# En la VM: usar el espacio libre del VG
+sudo lvextend -r -l +100%FREE /dev/ubuntu-vg/ubuntu-lv
+
+# En el anfitrión, con la VM apagada: ampliar el qcow2
+sudo qemu-img resize /var/lib/libvirt/images/delfos.qcow2 +30G
+
+# En la VM: crecer partición, volumen físico y volumen lógico
+sudo apt install -y cloud-guest-utils
+sudo growpart /dev/vda 3
+sudo pvresize /dev/vda3
+sudo lvextend -r -l +100%FREE /dev/ubuntu-vg/ubuntu-lv
+df -h /
+\end{lstlisting}
+
+El sistema de ficheros raíz pasa a 67 GB con 55 GB libres
+(figuras~\ref{fig:qemuimg} y~\ref{fig:lvextend}).
+\end{cabezazo}
+
+\captura[0.6\linewidth]{cabezazoalien.png}{Ampliación del disco virtual con \texttt{qemu-img resize}}{fig:qemuimg}
+
+\captura{solucioncabezazoalien.png}{\texttt{growpart}, \texttt{pvresize} y \texttt{lvextend}: el volumen raíz pasa de 38 a 68 GiB}{fig:lvextend}
+
+\begin{cabezazo}{\texttt{zstd write error} con 55 GB libres}{cab:tmpfs}
+\problema Con espacio de sobra en el disco, \cmd{alien} vuelve a fallar al
+final con \cmd{dpkg-deb (subproceso): comprimiendo miembro tar: zstd write
+error: No space left on device}, y el \cmd{.deb} generado pesa solo 521 KB.
+
+\causa \cmd{dpkg-deb} comprime el paquete en un fichero temporal en
+\cmd{/tmp}, y en Ubuntu 26.04 \cmd{/tmp} es un \emph{tmpfs} en memoria RAM de
+solo 1,7 GB (la mitad de la RAM de la VM):
+
+\begin{lstlisting}[style=fichero]
+$ df -h /tmp
+Filesystem      Size  Used Avail Use% Mounted on
+tmpfs           1,7G     0  1,7G   0% /tmp
+\end{lstlisting}
+
+\solucion Indicar un directorio temporal en disco con la variable
+\cmd{TMPDIR}. Se usa \cmd{sudo env} porque \cmd{sudo} descarta las variables de
+entorno del usuario:
+
+\begin{lstlisting}[style=bash]
+mkdir -p ~/tmp-alien
+sudo env TMPDIR=/home/sercal/tmp-alien alien --scripts -d \
+     oracle-database-xe-21c-1.0-1.ol8.x86_64.rpm
+ls -lh *.deb
+\end{lstlisting}
+
+Los numerosos mensajes \cmd{dpkg-shlibdeps: error: cannot find library ...}
+que aparecen durante la conversión no son el problema: \cmd{alien} los ignora
+(\cmd{Error 25 (ignored)}) porque son librerías que Oracle incluye en su propio
+\texttt{ORACLE\_HOME}.
+\end{cabezazo}
+
+\captura{debcreado.png}{Paquete \texttt{oracle-database-xe-21c\_1.0-2\_amd64.deb} generado correctamente (2,2 GB)}{fig:deb}
+
+% ---------------------------------------------------------------------
+\subsection{Instalación del paquete}
+\label{sec:dpkg}
+
+Antes de instalar se crea el enlace que Oracle espera para \cmd{libaio}
+(en Ubuntu 26.04 la librería se llama \cmd{libaio.so.1t64}) y se comprueba que
+el \texttt{ORACLE\_BASE} pertenece al usuario \cmd{oracle}:
+
+\begin{lstlisting}[style=bash]
+sudo ln -sf /usr/lib/x86_64-linux-gnu/libaio.so.1t64 \
+            /usr/lib/x86_64-linux-gnu/libaio.so.1
+sudo chown oracle:oinstall /opt/oracle /opt/oraInventory
+sudo dpkg -i oracle-database-xe-21c_1.0-2_amd64.deb
+\end{lstlisting}
+
+\begin{cabezazo}{\texttt{awk: command not found} en el script de preinstalación}{cab:awk}
+\problema \cmd{dpkg -i} se detiene en el \emph{preinst}:
+\cmd{/var/lib/dpkg/tmp.ci/preinst: line 188: awk: command not found}.
+
+\causa Siguiendo una receta pensada para distribuciones antiguas se ejecutó
+\cmd{sudo ln -sf /usr/bin/awk /bin/awk}. En Ubuntu moderno \cmd{/bin} es un
+enlace a \cmd{/usr/bin} (\emph{usrmerge}), así que el comando sobrescribió
+\cmd{/usr/bin/awk} con un enlace que apunta a sí mismo
+(\cmd{/usr/bin/awk -> /usr/bin/awk}) y \cmd{awk} dejó de existir en todo el
+sistema.
+
+\solucion Borrar el enlace roto y reinstalar \cmd{mawk}, que regenera el
+grupo de alternativas de \cmd{awk}:
+
+\begin{lstlisting}[style=bash]
+sudo rm /usr/bin/awk
+sudo apt install --reinstall mawk
+ls -l /usr/bin/awk      # /usr/bin/awk -> /etc/alternatives/awk
+awk --version
+\end{lstlisting}
+
+El aviso \cmd{ln: failed to create symbolic link '/bin/awk': Already exists}
+que muestra después el instalador de Oracle es inofensivo.
+\textbf{No hay que crear ningún enlace para \cmd{awk} en Ubuntu.}
+\end{cabezazo}
+
+\captura{cabezazoawk.png}{El enlace circular de \texttt{awk} y su reparación reinstalando \texttt{mawk}}{fig:awk}
+
+\begin{cabezazo}{\texttt{ORACLE\_BASE} no pertenece al usuario \texttt{oracle}}{cab:oraclebase}
+\problema En la misma ejecución, el preinstalador muestra
+\cmd{[SEVERE] The install cannot proceed because ORACLE_BASE directory
+(/opt/oracle) is not owned by "oracle" user}.
+
+\causa El paquete comprueba la propiedad de \cmd{/opt/oracle} antes de
+desempaquetar (y lo hace usando \cmd{awk}, por lo que el problema anterior
+agravaba este).
+
+\solucion \cmd{sudo chown -R oracle:oinstall /opt/oracle /opt/oraInventory}
+\emph{antes} de instalar. Una vez instalado Oracle \textbf{no debe repetirse el
+\cmd{chown -R}}: ver el cabezazo~\ref{cab:oradism}.
+\end{cabezazo}
+
+Con \cmd{awk} reparado, la instalación termina correctamente:
+
+\captura{solawk.png}{\texttt{Oracle home installed successfully and ready to be configured}}{fig:dpkgok}
+
+El instalador sugiere ejecutar \cmd{/etc/init.d/oracle-xe-21c configure}, pero
+\textbf{no se ejecuta}: ese script crearía una base de datos \cmd{XE} con valores
+por defecto, mientras que BAHIA debe crearse con DBCA y los parámetros del
+enunciado.
+
+Se toma una instantánea de la VM en este punto y se borran los paquetes
+descargados (los originales se conservan en el directorio \cmd{software/} del
+anfitrión):
+
+\begin{lstlisting}[style=bash]
+# Anfitrión, con la VM apagada
+virsh -c qemu:///system snapshot-create-as delfos --name "s2-xe-instalado" \
+      --description "Oracle XE 21c instalado, sin BAHIA"
+# VM
+rm -f ~/oracle-database-xe-21c-1.0-1.ol8.x86_64.rpm
+sudo rm -f ~/oracle-database-xe-21c_1.0-2_amd64.deb
+\end{lstlisting}
+
+\captura{snapshot2.png}{Instantánea \texttt{s2-xe-instalado}}{fig:snap2}
+\captura[0.7\linewidth]{limpiezapostsnpcht.png}{Limpieza de paquetes: 51 GB libres}{fig:limpieza}
+
+% ---------------------------------------------------------------------
+\subsection{Entorno del usuario \texttt{oracle} y listener}
+\label{sec:entorno}
+
+Las variables de entorno definidas en la semana 1 en
+\cmd{/home/oracle/.bash_profile} apuntan ya al \texttt{ORACLE\_HOME} instalado.
+Se comprueba además que los binarios no tienen librerías sin resolver:
+
+\begin{lstlisting}[style=bash]
+sudo su - oracle
+echo $ORACLE_HOME $ORACLE_SID
+which sqlplus dbca lsnrctl
+ldd $ORACLE_HOME/bin/oracle  | grep "not found"
+ldd $ORACLE_HOME/bin/sqlplus | grep "not found"
+sqlplus -v
+\end{lstlisting}
+
+\captura[0.6\linewidth]{entornousuariooracle.png}{Entorno de \texttt{oracle} correcto y sin librerías ausentes}{fig:entorno}
+
+Al no haber usado el \cmd{configure} de XE, el listener se crea a mano. Escucha
+por TCP en \cmd{delfos.inf:1521} (el nombre se resuelve con \cmd{/etc/hosts}) y
+por IPC:
+
+\begin{lstlisting}[style=fichero,caption={\texttt{\$ORACLE\_HOME/network/admin/listener.ora}}]
+LISTENER =
+  (DESCRIPTION_LIST =
+    (DESCRIPTION =
+      (ADDRESS = (PROTOCOL = TCP)(HOST = delfos.inf)(PORT = 1521))
+      (ADDRESS = (PROTOCOL = IPC)(KEY = EXTPROC1521))
+    )
+  )
+\end{lstlisting}
+
+\begin{lstlisting}[style=bash]
+lsnrctl start
+lsnrctl status
+\end{lstlisting}
+
+\captura{listener.png}{Listener arrancado. Aún «no soporta ningún servicio» porque no existe ninguna base de datos}{fig:listener}
+
+% ---------------------------------------------------------------------
+\subsection{Creación de BAHIA.inf con DBCA}
+\label{sec:dbca}
+
+\subsubsection{Intento con la interfaz gráfica}
+
+La máquina es un Ubuntu Server sin entorno gráfico, así que la idea era lanzar
+DBCA reenviando su ventana al escritorio del anfitrión por SSH (X11
+\emph{forwarding}). Se instalaron las dependencias gráficas mínimas en la VM:
+
+\begin{lstlisting}[style=bash]
+sudo apt install -y xauth libxrender1 libxtst6 libxi6 fontconfig
+\end{lstlisting}
+
+\captura{x11.png}{Dependencias para el reenvío X11}{fig:x11deps}
+
+\begin{cabezazo}{DBCA: «DISPLAY not set»}{cab:display}
+\problema Al ejecutar \cmd{dbca} tras \cmd{sudo su - oracle} aparece
+\cmd{DISPLAY not set. Set DISPLAY environment variable, then re-run.}
+
+\causa La variable \cmd{DISPLAY} solo la crea una conexión \cmd{ssh -X} o
+\cmd{ssh -Y} hecha desde el anfitrión gráfico; una sesión abierta con
+\cmd{su} desde la consola de la VM no tiene pantalla a la que enviar la
+ventana. Además, al pegar de golpe un bloque que empieza por
+\cmd{sudo su - oracle}, las líneas siguientes se pierden mientras \cmd{sudo}
+pide la contraseña.
+
+\solucion Conectarse con \cmd{ssh -Y oracle@delfos.inf} desde el escritorio
+del anfitrión, o copiar la \emph{cookie} X11 de \cmd{sercal} a \cmd{oracle}
+(\cmd{xauth list $DISPLAY} / \cmd{xauth add ...}) ejecutando las órdenes de una
+en una.
+\end{cabezazo}
+
+\begin{cabezazo}{DBCA: «Invalid MIT-MAGIC-COOKIE-1 key»}{cab:cookie}
+\problema Con \cmd{DISPLAY=localhost:11.0} y la \emph{cookie} correctamente
+copiada (aparece en \cmd{xauth list}), DBCA falla con
+\cmd{Invalid MIT-MAGIC-COOKIE-1 key} y
+\cmd{java.lang.NoClassDefFoundError: Could not initialize class
+sun.awt.X11.XToolkit}.
+
+\causa El rechazo viene del lado del anfitrión: al conectar, SSH avisa
+\cmd{Warning: No xauth data; using fake authentication data for X11
+forwarding}. El escritorio del anfitrión (Wayland/XWayland) no ofrece una
+\emph{cookie} X11 válida, así que la que llega a la VM es falsa y el servidor
+gráfico rechaza la ventana, tanto con \cmd{-X} como con \cmd{-Y}.
+
+\solucion Se abandona la interfaz gráfica y se usa DBCA en \textbf{modo
+silencioso} (\cmd{-silent}), que ofrece las mismas opciones, incluida la
+generación de los scripts de creación, y queda mejor documentado en el
+repositorio (\cmd{scripts/03-dbca-bahia.sh}).
+\end{cabezazo}
+
+\captura[0.75\linewidth]{cabezazox11.png}{«No xauth data; using fake authentication data» al conectar con \texttt{ssh -Y}}{fig:x11a}
+\captura[0.75\linewidth]{cabezazox11_2.png}{La \emph{cookie} de \texttt{sercal} y el bloque pegado que se pierde tras \texttt{sudo su}}{fig:x11b}
+\captura{rendicionx11.png}{Con la \emph{cookie} copiada, DBCA sigue fallando: se pasa al modo silencioso}{fig:x11c}
+
+\subsubsection{Generación de los scripts de creación}
+
+El enunciado pide activar la opción de DBCA que genera los ficheros de comandos
+de creación. En modo silencioso es la operación \cmd{-generateScripts}. Primero
+se comprueba el nombre de la plantilla de XE:
+
+\begin{lstlisting}[style=bash]
+ls $ORACLE_HOME/assistants/dbca/templates/
+# XE_Database.dbc  XE_Seed_Database.ctl  XE_Seed_Database.dfb  pdbseed.dfb  pdbseed.xml
+mkdir -p /opt/oracle/admin/BAHIA/scripts
+\end{lstlisting}
+
+\begin{lstlisting}[style=bash]
+dbca -silent -generateScripts \
+  -templateName XE_Database.dbc \
+  -gdbName BAHIA.inf -sid XE \
+  -characterSet AL32UTF8 -nationalCharacterSet AL16UTF16 \
+  -createAsContainerDatabase true -numberOfPDBs 1 -pdbName BAHIAPDB \
+  -datafileDestination /opt/oracle/oradata -storageType FS \
+  -memoryMgmtType AUTO_SGA -totalMemory 1536 \
+  -emConfiguration NONE \
+  -scriptDest /opt/oracle/admin/BAHIA/scripts
+\end{lstlisting}
+
+El tamaño de bloque no se indica porque la plantilla de XE lo fija en 8192 bytes,
+justo el valor que pide el enunciado.
+
+\begin{cabezazo}{\texttt{[DBT-12513]} Esquemas de ejemplo no soportados}{cab:dbt12513}
+\problema Con la opción \cmd{-sampleSchema true}, DBCA responde
+\texttt{[FATAL] [DBT-12513] El esquema de muestra no está soportado en la versión
+del directorio raíz de Oracle 21.0.0.0.0.}
+
+\causa Desde Oracle 21c, DBCA ya no incluye los esquemas de ejemplo; Oracle
+los publica aparte en GitHub (\cmd{oracle-samples/db-sample-schemas}).
+
+\solucion Crear la base de datos sin \cmd{-sampleSchema} e instalar los
+esquemas después desde el repositorio oficial (sección~\ref{sec:hr}).
+\end{cabezazo}
+
+\begin{cabezazo}{\texttt{-generateScripts} termina con \texttt{NullPointerException}}{cab:npe}
+\problema Tras mostrar todos los porcentajes hasta el 100\,\%, el comando
+acaba con \cmd{[FATAL] java.lang.NullPointerException}. Parecía que la base de
+datos podía haberse creado a medias.
+
+\causa Es un fallo de DBCA al terminar la generación de scripts en modo
+silencioso. El progreso es simulado: en el log todos los pasos ocurren en el
+mismo segundo (20:47:51), no hay proceso \cmd{pmon}, \cmd{/opt/oracle/oradata}
+está vacío y \cmd{/etc/oratab} no tiene entradas.
+
+\solucion Ninguna: los 17 scripts se generan completos en
+\cmd{/opt/oracle/admin/BAHIA/scripts}. Se verifican y se continúa con
+\cmd{-createDatabase}.
+\end{cabezazo}
+
+\captura{scripts1.png}{\texttt{DBT-12513} con \texttt{-sampleSchema} y la generación de scripts sin él}{fig:gen}
+\captura[0.8\linewidth]{cabezazoscript1.png}{Comprobación: no hay instancia ni ficheros de datos, pero sí los scripts generados}{fig:genchk}
+
+Los scripts generados confirman los parámetros del enunciado
+(\cmdb{db_name="BAHIA"}, \cmdb{db_domain="inf"}, \cmdb{db_block_size=8192},
+\cmdb{AL32UTF8}) y no contienen contraseñas en claro: las piden en tiempo de
+ejecución mediante las variables de sustitución \cmdb{&&sysPassword} y
+\cmdb{&&systemPassword}. Por eso pueden subirse tal cual al directorio
+\cmdb{db-creation-scripts/} del repositorio.
+
+\begin{lstlisting}[style=bash]
+cd /opt/oracle/admin/BAHIA/scripts
+grep -E "db_name|db_domain|db_block_size" init.ora
+grep -i -E "characterset|AL32UTF8" *.sql
+grep -i -n "password\|identified by" *.sql *.sh
+\end{lstlisting}
+
+\captura{cabezazoscript2.png}{Parámetros de BAHIA en \texttt{init.ora} y contraseñas sustituidas por variables}{fig:scriptsgrep}
+
+\begin{table}[H]
+\centering\small
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.36\linewidth}p{0.58\linewidth}@{}}
+\toprule
+\textbf{Fichero} & \textbf{Función} \\
+\midrule
+\cmdb{XE.sh} & Script principal: crea directorios y lanza \cmdb{XE.sql}. \\
+\cmdb{XE.sql} & Pide las contraseñas y encadena el resto de scripts. \\
+\cmdb{init.ora} & Parámetros de inicialización de la instancia. \\
+\cmdb{cloneDBCreation.sql} & Crea la CDB a partir de la plantilla \emph{seed}. \\
+\cmdb{CloneRmanRestore.sql}, \cmdb{rman*.sql} & Restauran con RMAN los ficheros de la plantilla. \\
+\cmdb{plug_PDBSeed.sql}, \cmdb{plug_BAHIAPDB.sql} & Conectan \cmdb{PDB$SEED} y crean \cmdb{BAHIAPDB}. \\
+\cmdb{postScripts.sql}, \cmdb{postDBCreation.sql} & Compilan objetos y finalizan la configuración. \\
+\cmdb{lockAccount.sql} & Bloquea las cuentas internas no usadas. \\
+\bottomrule
+\end{tabular}
+\caption{Principales scripts de creación generados por DBCA}
+\label{tab:scripts}
+\end{table}
+
+\subsubsection{Creación de la base de datos}
+
+La creación se lanza dentro de \cmd{tmux} para que no se interrumpa si se corta
+la conexión SSH. DBCA pide por teclado las contraseñas de \cmd{SYS},
+\cmd{SYSTEM} y \cmd{PDBADMIN}, de modo que no quedan en el historial:
+
+\begin{lstlisting}[style=bash]
+dbca -silent -createDatabase \
+  -templateName XE_Database.dbc \
+  -gdbName BAHIA.inf -sid XE \
+  -characterSet AL32UTF8 -nationalCharacterSet AL16UTF16 \
+  -createAsContainerDatabase true -numberOfPDBs 1 -pdbName BAHIAPDB \
+  -datafileDestination /opt/oracle/oradata -storageType FS \
+  -memoryMgmtType AUTO_SGA -totalMemory 1536 \
+  -emConfiguration NONE
+\end{lstlisting}
+
+\begin{cabezazo}{\texttt{[DBT-10011]} Permisos incorrectos de \texttt{oradism}}{cab:oradism}
+\problema La creación se detiene con
+\cmd{[FATAL] [DBT-10011] Se han detectado una propiedad o permisos incorrectos
+para el archivo (/opt/oracle/product/21c/dbhomeXE/bin/oradism)}, acompañado de
+\cmd{PRVG-11960} (falta el bit SUID) y \cmd{PRVG-2031} (se esperaba
+\cmd{root(0)} y se encontró \cmd{oracle(54321)}).
+
+\causa \cmd{oradism} gestiona la memoria compartida de la instancia y debe
+pertenecer a \cmd{root} con el bit SUID. Los \cmd{chown -R oracle:oinstall
+/opt/oracle} ejecutados tras la instalación le cambiaron el propietario y le
+quitaron ese bit.
+
+\solucion Ejecutar como \cmd{root} el script \cmd{root.sh} del
+\texttt{ORACLE\_HOME}, que restablece los permisos especiales:
+
+\begin{lstlisting}[style=bash]
+sudo /opt/oracle/product/21c/dbhomeXE/root.sh
+ls -l /opt/oracle/product/21c/dbhomeXE/bin/oradism
+# -rwsr-x--- 1 root oinstall 1867560 Aug 18  2021 .../oradism
+\end{lstlisting}
+
+\cmd{root.sh} deja su salida en un log que \cmd{sercal} solo puede leer con
+\cmd{sudo} (de ahí un \cmd{Permission denied} al hacer \cmd{cat} sin él).
+\textbf{A partir de aquí no se vuelve a usar \cmd{chown -R} sobre
+\cmd{/opt/oracle}.}
+\end{cabezazo}
+
+\begin{cabezazo}{\texttt{[DBT-06208]} Contraseñas débiles}{cab:pwd}
+\problema DBCA muestra un aviso \cmd{DBT-06208} para \cmd{SYS},
+\cmd{SYSTEM} y \cmd{PDBADMIN}.
+
+\causa Oracle recomienda al menos 8 caracteres con mayúsculas, minúsculas y
+dígitos, y desaconseja palabras como «oracle». Es un aviso, no un error.
+
+\solucion Usar contraseñas robustas, ya que en la fase siguiente se abrirá
+el puerto 1521 a la red para la conexión remota como administrador. Las
+contraseñas se guardan en un gestor de contraseñas, nunca en el repositorio.
+\end{cabezazo}
+
+\captura{cabezazoscript3.png}{\texttt{DBT-06208} (aviso) y \texttt{DBT-10011} (error) en el primer intento}{fig:oradism}
+\captura{script4.png}{Creación de la base de datos completada: \texttt{BAHIA.inf}, SID \texttt{XE}}{fig:dbcaok}
+
+Esta vez cada fase tarda minutos, y la creación termina con
+\cmd{Nombre de la Base de Datos Global: BAHIA.inf} e
+\cmd{Identificador del Sistema (SID): XE}.
+
+\subsubsection{Verificación}
+
+\begin{lstlisting}[style=sql]
+-- sqlplus / as sysdba
+SELECT * FROM global_name;
+SELECT value FROM nls_database_parameters WHERE parameter='NLS_CHARACTERSET';
+SHOW PARAMETER db_block_size
+SELECT instance_name, status FROM v$instance;
+SHOW PDBS
+\end{lstlisting}
+
+\captura{porfinterminoscripts.png}{BAHIA.INF, AL32UTF8, bloque de 8192, instancia XE abierta y BAHIAPDB en lectura/escritura}{fig:verif}
+
+La base de datos se registra automáticamente en el listener, que ahora ofrece
+los servicios \cmd{BAHIA.inf} (CDB) y \cmd{bahiapdb.inf} (PDB). DBCA también
+añade la entrada de la instancia en \cmd{/etc/oratab}, todavía con arranque
+automático desactivado (\cmd{N}).
+
+\captura[0.8\linewidth]{listenercheck.png}{Servicios registrados en el listener y entrada en \texttt{/etc/oratab}}{fig:lsnrchk}
+
+Para hacer una instantánea coherente se detienen la base de datos y el listener,
+se apaga la VM y se crea la instantánea \cmd{s2-bahia-creada}:
+
+\captura[0.8\linewidth]{presnapshot3.png}{Parada ordenada con \texttt{SHUTDOWN IMMEDIATE}}{fig:shutdown}
+\captura{snapshot3.png}{Instantánea \texttt{s2-bahia-creada}}{fig:snap3}
+
+Tras volver a arrancar la VM, la base de datos se levanta a mano:
+
+\captura[0.75\linewidth]{startup.png}{\texttt{lsnrctl start} y \texttt{STARTUP}: SGA de 1,5 GB, base de datos abierta}{fig:startup}
+
+\begin{cabezazo}[unbreakable]{La PDB queda en \texttt{MOUNTED} tras reiniciar}{cab:pdb}
+\problema Después del \cmd{STARTUP}, \cmd{SHOW PDBS} muestra
+\cmd{BAHIAPDB} en estado \cmd{MOUNTED}, no accesible.
+
+\causa Por defecto las PDB no se abren al arrancar la CDB.
+
+\solucion Abrirla y guardar su estado para que se abra sola en cada
+arranque:
+
+\begin{lstlisting}[style=sql]
+ALTER PLUGGABLE DATABASE BAHIAPDB OPEN;
+ALTER PLUGGABLE DATABASE BAHIAPDB SAVE STATE;
+\end{lstlisting}
+\end{cabezazo}
+
+\captura[0.75\linewidth]{showpdbs.png}{\texttt{BAHIAPDB} abierta en \texttt{READ WRITE} y con el estado guardado}{fig:pdb}
+
+% ---------------------------------------------------------------------
+\subsection{Esquemas de ejemplo}
+\label{sec:hr}
+
+Como DBCA 21c ya no los incluye (cabezazo~\ref{cab:dbt12513}), se descargan los
+esquemas oficiales de Oracle y se instala el esquema \textbf{HR (Human
+Resources)}, que es el que se usará para la migración a PostgreSQL:
+
+\begin{lstlisting}[style=bash]
+cd ~
+wget https://github.com/oracle-samples/db-sample-schemas/archive/refs/heads/main.tar.gz \
+     -O sample-schemas.tar.gz
+tar xzf sample-schemas.tar.gz
+cd db-sample-schemas-main/human_resources
+sqlplus system@//delfos.inf:1521/bahiapdb.inf
+\end{lstlisting}
+
+\begin{lstlisting}[style=sql]
+SHOW CON_NAME        -- debe mostrar BAHIAPDB
+@hr_install.sql
+\end{lstlisting}
+
+El instalador pide la contraseña de \cmd{HR}, el tablespace (\cmd{USERS}) y si
+debe sobrescribir el esquema (\cmd{YES}).
+
+\begin{cabezazo}{\texttt{ORA-65096} al crear el usuario HR}{cab:ora65096}
+\problema El primer intento de \cmd{hr_install.sql} falla en
+\cmd{CREATE USER hr ...} con \texttt{ORA-65096: nombre de usuario o rol común no
+válido}.
+
+\causa El script se ejecutó conectado a la raíz del contenedor
+(\cmd{CDB$ROOT}), donde solo pueden crearse usuarios comunes con prefijo
+\texttt{C\#\#}. Los esquemas de ejemplo deben ir en la PDB.
+
+\solucion Conectarse al servicio de la PDB (\cmd{bahiapdb.inf}, obtenido con
+\cmd{lsnrctl status | grep -i bahia}) y comprobar con \cmd{SHOW CON_NAME} que se
+está en \cmd{BAHIAPDB} antes de lanzar el script. Alternativa:
+\cmd{ALTER SESSION SET CONTAINER = BAHIAPDB;} como \cmd{SYS}.
+\end{cabezazo}
+
+\begin{cabezazo}{\texttt{ORA-01017} al conectar como \texttt{SYSTEM}}{cab:ora01017}
+\problema La primera conexión \cmd{sqlplus system@//delfos.inf:1521/bahiapdb.inf}
+devuelve \texttt{ORA-01017: nombre de usuario/contraseña no válidos}.
+
+\causa Contraseña mal tecleada (SQL*Plus no la muestra al escribirla).
+
+\solucion SQL*Plus vuelve a pedir usuario y contraseña; al introducirlos
+bien, la conexión funciona.
+\end{cabezazo}
+
+\captura{schema1.png}{Descarga de los esquemas oficiales y conexión a la PDB}{fig:hr1}
+\captura[0.8\linewidth]{schema2.png}{Instalación de HR en \texttt{BAHIAPDB}}{fig:hr2}
+\captura[0.8\linewidth]{schema3.png}{Verificación del instalador: todas las tablas con las filas esperadas}{fig:hr3}
+
+\begin{table}[H]
+\centering\small
+\begin{tabular}{@{}lrr@{}}
+\toprule
+\textbf{Tabla} & \textbf{Esperadas} & \textbf{Cargadas} \\
+\midrule
+\cmd{regions} & 5 & 5 \\
+\cmd{countries} & 25 & 25 \\
+\cmd{departments} & 27 & 27 \\
+\cmd{locations} & 23 & 23 \\
+\cmd{employees} & 107 & 107 \\
+\cmd{jobs} & 19 & 19 \\
+\cmd{job_history} & 10 & 10 \\
+\bottomrule
+\end{tabular}
+\caption{Verificación del esquema HR}
+\label{tab:hr}
+\end{table}
+
+Por último, se comprueba el acceso con el propio usuario \cmd{HR}:
+
+\captura[0.8\linewidth]{schemacheck.png}{Consulta a \texttt{employees} conectado como \texttt{HR}}{fig:hrchk}
+
+% ---------------------------------------------------------------------
+\subsection{Arranque automático}
+\label{sec:arranque}
+
+El paquete RPM de Oracle no crea en Ubuntu un servicio de arranque, así que se
+define uno para \cmd{systemd} basado en las utilidades \cmd{dbstart} y
+\cmd{dbshut}, que arrancan y detienen las instancias marcadas con \cmd{Y} en
+\cmd{/etc/oratab} (y también el listener, al recibir el \texttt{ORACLE\_HOME}).
+
+\begin{lstlisting}[style=bash]
+sudo sed -i 's|^XE:/opt/oracle/product/21c/dbhomeXE:N|XE:/opt/oracle/product/21c/dbhomeXE:Y|' /etc/oratab
+grep XE /etc/oratab
+\end{lstlisting}
+
+\captura[0.8\linewidth]{arranqueauto.png}{Activación del arranque automático en \texttt{/etc/oratab}}{fig:oratab}
+
+\begin{lstlisting}[style=fichero,caption={\texttt{/etc/systemd/system/oracle-xe.service}}]
+[Unit]
+Description=Oracle Database XE 21c (BAHIA.inf) y listener
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=oracle
+Group=oinstall
+Environment=ORACLE_HOME=/opt/oracle/product/21c/dbhomeXE
+ExecStart=/opt/oracle/product/21c/dbhomeXE/bin/dbstart /opt/oracle/product/21c/dbhomeXE
+ExecStop=/opt/oracle/product/21c/dbhomeXE/bin/dbshut /opt/oracle/product/21c/dbhomeXE
+TimeoutSec=600
+
+[Install]
+WantedBy=multi-user.target
+\end{lstlisting}
+
+\captura[0.8\linewidth]{servicioracle.png}{Fichero de unidad del servicio}{fig:unit}
+
+\begin{cabezazo}{«I'm sorry oracle. I'm afraid I can't do that»}{cab:sudo}
+\problema Al ejecutar \cmd{sudo systemctl ...} desde la sesión del usuario
+\cmd{oracle}, \cmd{sudo} lo rechaza y el servicio queda \cmd{disabled} e
+\cmd{inactive (dead)}.
+
+\causa El usuario \cmd{oracle} no pertenece al grupo \cmd{sudo}, y es lo
+correcto: el propietario del software de Oracle no debe tener privilegios de
+administración.
+
+\solucion Cambiar al usuario administrador (\cmd{su - sercal}) y activar el
+servicio desde ahí.
+\end{cabezazo}
+
+Antes de activarlo se detienen la base de datos y el listener arrancados a mano:
+
+\captura[0.7\linewidth]{servicio2.png}{Parada manual previa a la activación del servicio}{fig:stopmanual}
+
+\begin{lstlisting}[style=bash]
+sudo systemctl daemon-reload
+sudo systemctl enable --now oracle-xe
+systemctl status oracle-xe
+\end{lstlisting}
+
+\captura{service3.png}{Servicio \texttt{enabled} y \texttt{active (exited)}: listener y procesos de la instancia \texttt{XE}}{fig:service}
+
+La prueba definitiva es reiniciar la máquina y comprobar que todo vuelve solo,
+incluida la PDB gracias al \cmd{SAVE STATE}:
+
+\begin{lstlisting}[style=bash]
+sudo reboot
+# tras volver a entrar como sercal
+systemctl status oracle-xe
+ps -ef | grep [p]mon
+sudo su - oracle -c 'echo "SHOW PDBS" | sqlplus -s / as sysdba'
+\end{lstlisting}
+
+\captura{servicecheck1.png}{Tras el reinicio, el servicio ha arrancado solo}{fig:reboot1}
+\captura[0.85\linewidth]{servicecheck2.png}{Proceso \texttt{xe\_pmon\_XE} activo y \texttt{BAHIAPDB} en \texttt{READ WRITE} sin intervención manual}{fig:reboot2}
+
+Con todo verificado se toma la instantánea final de la fase:
+
+\captura{snapshot4.png}{Instantánea \texttt{s2-bahia-completa}}{fig:snap4}
+
+% --------------------------------------------------
+\subsection{Verificación}
+
+Para dar por concluido el apartado se han realizado las comprobaciones de la Tabla~\ref{tab:verif2}, todas ellas con resultado satisfactorio.
+
+\begin{table}[!htbp]
+    \centering
+    \small
+    \begin{tabularx}{\textwidth}{L{3.4cm} L{5.2cm} Y}
+        \toprule
+        \textbf{Comprobación} & \textbf{Comando} & \textbf{Resultado esperado} \\
+        \midrule
+        Integridad del RPM & \texttt{sha256sum} & Coincide con el hash de Oracle (Fig.~\ref{fig:sha256}) \\
+        Software instalado & \texttt{sqlplus -v} (como \texttt{oracle}) & \texttt{Release 21.0.0.0.0} (Fig.~\ref{fig:entorno}) \\
+        Nombre global & \texttt{SELECT * FROM global\_name;} & \texttt{BAHIA.INF} (Fig.~\ref{fig:verif}) \\
+        Juego de caracteres & \texttt{nls\_database\_parameters} & \texttt{AL32UTF8} \\
+        Tamaño de bloque & \texttt{SHOW PARAMETER db\_block\_size} & \texttt{8192} \\
+        Instancia & \texttt{SELECT ... FROM v\$instance;} & \texttt{XE} en \texttt{OPEN} \\
+        PDB & \texttt{SHOW PDBS} & \texttt{BAHIAPDB} en \texttt{READ WRITE} \\
+        Scripts de creación & \texttt{ls /opt/oracle/admin/BAHIA/scripts} & 17 scripts (Tabla~\ref{tab:scripts}) \\
+        Esquema HR & \texttt{hr\_install.sql} & Filas esperadas = cargadas (Tabla~\ref{tab:hr}) \\
+        \textit{Listener} & \texttt{lsnrctl status} & Servicios \texttt{BAHIA.inf} y \texttt{bahiapdb.inf} \\
+        Arranque automático & \texttt{systemctl status oracle-xe} & \texttt{enabled}, instancia abierta tras reiniciar (Fig.~\ref{fig:reboot2}) \\
+        Snapshots & \texttt{virsh snapshot-list delfos} & \texttt{s2-xe-instalado}, \texttt{s2-bahia-creada}, \texttt{s2-bahia-completa} \\
+        \bottomrule
+    \end{tabularx}
+    \caption{Comprobaciones del Apartado 2}
+    \label{tab:verif2}
+\end{table}
+
+Los comandos ejecutados se han recogido en los scripts \path{scripts/02-instalar-xe.sh} y \path{scripts/03-dbca-bahia.sh}; el \textit{listener} y el servicio de arranque, en la carpeta \texttt{config/}, y los scripts generados por DBCA, en \texttt{db-creation-scripts/} del repositorio.
+
+
+% ==================== ANEXO: LOG DE CABEZAZOS ====================
+\newpage
+\section*{Anexo. Log de cabezazos}
+\addcontentsline{toc}{section}{Anexo. Log de cabezazos}
+\label{sec:cabezazos}
+
+Registro de los problemas encontrados durante el despliegue, su causa y cómo se
+resolvieron. Cada uno se explica con más detalle, junto con sus capturas, en el cuadro rojo del apartado correspondiente.
+
+{\footnotesize
+\let\cmd\cmdb
+\renewcommand{\arraystretch}{1.25}
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{0.4cm}
+                              >{\raggedright\arraybackslash}p{1.5cm}
+                              >{\raggedright\arraybackslash}p{1.5cm}
+                              >{\raggedright\arraybackslash}X
+                              >{\raggedright\arraybackslash}X
+                              >{\raggedright\arraybackslash}X@{}}
+\toprule
+\textbf{Nº} & \textbf{Fecha} & \textbf{Fase} & \textbf{Problema} & \textbf{Causa} & \textbf{Solución} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Nº} & \textbf{Fecha} & \textbf{Fase} & \textbf{Problema} & \textbf{Causa} & \textbf{Solución} \\
+\midrule
+\endhead
+\midrule
+\multicolumn{6}{r}{\textit{Continúa en la página siguiente}} \\
+\endfoot
+\bottomrule
+\endlastfoot
+
+\rowcolor{gray!12}\multicolumn{6}{@{}l}{\textbf{Apartado 1: máquina virtual, red y preparación OFA}} \\
+
+\ref{cab:virsh} & 06/10/2026 & VM &
+\cmd{virsh shutdown delfos} devuelve «error: incorrecto al obtener dominio 'delfos'». &
+La VM se creó en \cmd{qemu:///system}, pero \cmd{virsh} sin \cmd{sudo} usa
+\cmd{qemu:///session}, que no la ve. &
+\cmd{virsh -c qemu:///system ...} o fijar \texttt{LIBVIRT\_DEFAULT\_URI}. \\
+
+\ref{cab:br0} & 06/10/2026 & VM / red &
+\cmd{virt-install} falla: «No se puede obtener MTU del interfaz en 'br0': No existe el dispositivo». &
+El puente no existía y, una vez creado con \cmd{nmcli con add}, estaba definido pero no activado. &
+\texttt{nmcli con down "Conexión cableada 1"; nmcli con up br0-slave; nmcli con up br0}
+y comprobar con \cmd{ip -br link}. Solo con cable. \\
+
+\ref{cab:netplan} & 06/10/2026 & Ubuntu &
+El primer \cmd{netplan try} deja la VM sin red y se revierte. &
+Se copió una configuración de ejemplo (\cmd{192.168.1.50}, gateway \cmd{192.168.1.1}) de otra red. &
+Usar los valores reales: \cmd{192.168.3.133/24} y \cmd{192.168.3.1}. \\
+
+\ref{cab:preinstall} & 06/10/2026 & OFA &
+No existe \cmd{oracle-database-preinstall} para Ubuntu. &
+Oracle solo lo publica para Oracle Linux / RHEL. &
+Grupos, usuario, directorios, \cmd{sysctl} y límites creados a mano. \\
+
+\rowcolor{gray!12}\multicolumn{6}{@{}l}{\textbf{Apartado 2: Oracle XE 21c y BAHIA.inf}} \\
+
+\ref{cab:disco} & 13/10/2026 & Instalación XE &
+\cmd{alien} aborta con «No space left on device». &
+\cmd{alien} necesita $\sim$20 GB temporales y el volumen lógico raíz solo tenía
+19 GB (el instalador dejó otros 19 GB sin asignar en el VG). &
+\texttt{lvextend -r -l +100\%FREE}; además \cmd{qemu-img resize +30G},
+\cmd{growpart}, \cmd{pvresize} y \cmd{lvextend}: raíz de 67 GB. \\
+
+\ref{cab:tmpfs} & 13/10/2026 & Instalación XE &
+«zstd write error: No space left on device» con 55 GB libres; el
+\cmd{.deb} sale de 521 KB. &
+\cmd{dpkg-deb} comprime en \cmd{/tmp}, que en Ubuntu 26.04 es un tmpfs en RAM de
+1,7 GB. &
+\cmd{sudo env TMPDIR=/home/sercal/tmp-alien alien --scripts -d ...}. Los errores
+de \cmd{dpkg-shlibdeps} se ignoran. \\
+
+\ref{cab:awk} & 13/10/2026 & Instalación XE &
+El \emph{preinst} falla con «awk: command not found». &
+\cmd{ln -sf /usr/bin/awk /bin/awk} en un sistema con \emph{usrmerge} creó el
+enlace circular \cmd{/usr/bin/awk -> /usr/bin/awk}. &
+\cmd{sudo rm /usr/bin/awk} y \cmd{sudo apt install --reinstall mawk}. No crear
+enlaces para \cmd{awk}. \\
+
+\ref{cab:oraclebase} & 13/10/2026 & Instalación XE &
+«ORACLE\_BASE directory (/opt/oracle) is not owned by oracle user». &
+El \emph{preinst} comprueba la propiedad de \cmd{/opt/oracle} antes de
+desempaquetar. &
+\cmd{chown -R oracle:oinstall /opt/oracle /opt/oraInventory} antes de instalar
+(nunca después). \\
+
+\ref{cab:display} & 13/10/2026 & DBCA &
+\cmd{dbca}: «DISPLAY not set». &
+Sesión abierta con \cmd{sudo su - oracle} sin reenvío X11; al pegar un bloque,
+las líneas tras \cmd{sudo su} se pierden. &
+Conectar con \cmd{ssh -Y oracle@delfos.inf} o copiar la cookie con
+\cmd{xauth add}, ejecutando las órdenes de una en una. \\
+
+\ref{cab:cookie} & 13/10/2026 & DBCA &
+«Invalid MIT-MAGIC-COOKIE-1 key» y
+\cmd{NoClassDefFoundError: ... XToolkit}. &
+El escritorio del anfitrión (Wayland) no da una cookie X11 válida:
+«No xauth data; using fake authentication data». &
+Usar DBCA en modo silencioso (\cmd{-silent}). \\
+
+\ref{cab:dbt12513} & 13/10/2026 & DBCA &
+\cmd{[DBT-12513]} El esquema de muestra no está soportado. &
+DBCA 21c ya no incluye los esquemas de ejemplo. &
+Crear sin \cmd{-sampleSchema} e instalarlos desde
+\cmd{oracle-samples/db-sample-schemas}. \\
+
+\ref{cab:npe} & 13/10/2026 & DBCA &
+\cmd{-generateScripts} acaba con \cmd{java.lang.NullPointerException}. &
+Fallo de DBCA al terminar; el progreso es simulado y no se crea nada. &
+Ninguna: los 17 scripts se generan completos. Verificar que no hay
+\cmd{pmon} ni ficheros en \cmd{oradata}. \\
+
+\ref{cab:oradism} & 13/10/2026 & DBCA &
+\cmd{[DBT-10011]} propiedad/permisos incorrectos de \cmd{oradism}
+(\cmd{PRVG-11960}, \cmd{PRVG-2031}). &
+Un \cmd{chown -R} posterior a la instalación quitó a \cmd{root} la propiedad y
+el bit SUID de \cmd{oradism}. &
+\cmd{sudo $ORACLE_HOME/root.sh}. No volver a usar \cmd{chown -R} sobre
+\cmd{/opt/oracle}. \\
+
+\ref{cab:pwd} & 13/10/2026 & DBCA &
+Aviso \cmd{[DBT-06208]} para SYS, SYSTEM y PDBADMIN. &
+Contraseñas cortas o prohibidas (p.\,ej. «oracle»). &
+Contraseñas de 8+ caracteres con mayúsculas, minúsculas y dígitos, guardadas
+fuera del repositorio. \\
+
+\ref{cab:pdb} & 13/10/2026 & BAHIA &
+Tras reiniciar, \cmd{BAHIAPDB} queda en \cmd{MOUNTED}. &
+Las PDB no se abren solas al arrancar la CDB. &
+\cmd{ALTER PLUGGABLE DATABASE BAHIAPDB OPEN;} y \cmd{... SAVE STATE;}. \\
+
+\ref{cab:ora65096} & 13/10/2026 & Esquemas &
+\cmd{hr_install.sql}: \cmd{ORA-65096} nombre de usuario o rol común no válido. &
+Se ejecutó en \cmd{CDB$ROOT}, donde solo se admiten usuarios comunes
+\texttt{C\#\#}. &
+Conectar a \cmd{//delfos.inf:1521/bahiapdb.inf} y comprobar
+\cmd{SHOW CON_NAME}. \\
+
+\ref{cab:ora01017} & 13/10/2026 & Esquemas &
+\cmd{ORA-01017} usuario/contraseña no válidos al conectar como SYSTEM. &
+Contraseña mal tecleada. &
+Reintroducir las credenciales. \\
+
+\ref{cab:sudo} & 13/10/2026 & Arranque &
+«I'm sorry oracle. I'm afraid I can't do that» al usar \cmd{sudo}. &
+El usuario \cmd{oracle} no tiene (ni debe tener) privilegios de \cmd{sudo}. &
+Ejecutar las tareas de sistema con \cmd{sercal} (\cmd{su - sercal}). \\
+\end{xltabular}
+}
+
+\subsection*{Lecciones aprendidas}
+
+\begin{itemize}
+  \item Comprobar el espacio \emph{real} disponible (\cmd{df -h /}, \cmd{vgs},
+        \cmd{df -h /tmp}) antes de procesar paquetes grandes.
+  \item No aplicar a ciegas recetas escritas para distribuciones antiguas: en
+        Ubuntu moderno \cmd{/bin} y \cmd{/usr/bin} son el mismo directorio.
+  \item No usar \cmd{chown -R} sobre un \texttt{ORACLE\_HOME} ya instalado: hay
+        binarios que deben ser de \cmd{root} con SUID.
+  \item En una CDB, los esquemas de aplicación van siempre en una PDB.
+  \item Separar los usuarios: \cmd{sercal} administra el sistema y \cmd{oracle}
+        administra la base de datos.
+  \item Hacer instantáneas antes de cada paso delicado ha permitido trabajar sin
+        miedo a tener que reinstalar desde cero.
+\end{itemize}
 
 \end{document}
