@@ -1,0 +1,18 @@
+# /etc/systemd/system/oracle-xe.service
+[Unit]
+Description=Oracle Database XE 21c (BAHIA.inf) y listener
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=oracle
+Group=oinstall
+Environment=ORACLE_HOME=/opt/oracle/product/21c/dbhomeXE
+ExecStart=/opt/oracle/product/21c/dbhomeXE/bin/dbstart /opt/oracle/product/21c/dbhomeXE
+ExecStop=/opt/oracle/product/21c/dbhomeXE/bin/dbshut /opt/oracle/product/21c/dbhomeXE
+TimeoutSec=600
+
+[Install]
+WantedBy=multi-user.target
