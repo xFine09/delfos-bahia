@@ -1,8 +1,14 @@
 # Tutorial en LaTeX
 
-- `main.tex`: documento completo (Apartado 1, Apartado 2 y anexo con el log de cabezazos).
-- `Images/SemanaN/`: capturas de cada semana (`Semana1`, `Semana2`, ...).
+- `main.tex`: preámbulo, portada, índice e introducción; reúne el resto con `\input`.
+- `Semana1.tex`: Apartado 1, preparación del entorno (VM, Ubuntu Server y OFA).
+- `Semana2.tex`: Apartado 2, instalación de Oracle XE 21c y creación de BAHIA.inf.
+- `Cabezazos.tex`: anexo con el log de cabezazos de todas las semanas.
+- `Images/SemanaN/`: capturas de cada semana.
 - `main.pdf`: vista previa compilada.
 
-Compilar dos veces con `pdflatex main.tex` (para el índice y las referencias).
-Requiere, además de los paquetes del Apartado 1: `tcolorbox`, `xltabular` y `colortbl`.
+Se compila solo `main.tex`, dos veces: `pdflatex main.tex`.
+
+Para añadir una semana nueva: crear `SemanaN.tex`, la carpeta `Images/SemanaN/`,
+añadir la carpeta a `\graphicspath` y la línea `\input{SemanaN}` en `main.tex`.
+Los cabezazos nuevos se añaden como filas en `Cabezazos.tex`.
