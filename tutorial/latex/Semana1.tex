@@ -1,0 +1,574 @@
+% =====================================================================
+% Semana1.tex — Apartado 1: preparación del entorno (VM, Ubuntu Server y OFA)
+% Se incluye desde main.tex con \input; no compilar por separado.
+% =====================================================================
+
+% ==================== APARTADO 1 ====================
+\section{Preparación del entorno: VM, Ubuntu Server y arquitectura OFA}
+
+% --------------------------------------------------
+\subsection{Objetivos}
+
+El objetivo de este apartado es dejar preparado el servidor sobre el que se instalará Oracle Database XE. Al finalizarlo, el entorno debe cumplir las siguientes condiciones:
+
+\begin{itemize}
+    \item Los dos anfitriones, Debian y CachyOS, disponen de Qemu/KVM y libvirt operativos.
+    \item La máquina virtual \texttt{delfos.inf} está instalada con Ubuntu Server LTS y es accesible por SSH.
+    \item El sistema dispone de una dirección IP fija, un nombre de equipo completo y memoria de intercambio suficiente.
+    \item Existen el usuario \texttt{oracle}, sus grupos y la estructura de directorios definida por la arquitectura OFA.
+    \item Los parámetros del kernel, los límites de recursos y las variables de entorno cumplen los requisitos de Oracle.
+    \item Se dispone de un snapshot de la máquina virtual que permite volver a este estado en caso de error.
+\end{itemize}
+
+% --------------------------------------------------
+\subsection{Equipos anfitriones}
+
+Cada miembro del grupo trabaja sobre su propio equipo anfitrión, con una distribución distinta. La Tabla~\ref{tab:anfitriones} resume las diferencias entre ambos que afectan a este apartado.
+
+\begin{table}[!htbp]
+    \centering
+    \begin{tabularx}{\textwidth}{L{4cm} Y Y}
+        \toprule
+        \textbf{Aspecto} & \textbf{Debian} & \textbf{CachyOS} \\
+        \midrule
+        Responsable & Pedro Catalán & Alejandro Serrano \\
+        Base & Debian estable & Arch Linux \\
+        Modelo de publicación & Versiones estables periódicas & \textit{Rolling release} (actualización continua) \\
+        Gestor de paquetes & \texttt{apt} & \texttt{pacman} \\
+        Gestión de red & \texttt{ifupdown} o NetworkManager & NetworkManager \\
+        Cortafuegos por defecto & Ninguno & \texttt{ufw} activado \\
+        Intérprete de órdenes por defecto & \texttt{bash} & \texttt{fish} \\
+        \bottomrule
+    \end{tabularx}
+    \caption{Comparativa de los equipos anfitriones}
+    \label{tab:anfitriones}
+\end{table}
+
+Tener dos anfitriones distintos permite comprobar que el despliegue no depende de una distribución concreta: los pasos realizados dentro de la máquina virtual son los mismos en ambos casos, y solo cambian la instalación de paquetes y la configuración de red del anfitrión.
+
+% --------------------------------------------------
+\subsection{Requisitos del equipo anfitrión}
+
+La máquina virtual se ejecuta sobre el hipervisor Qemu/KVM, que requiere que el procesador del anfitrión disponga de virtualización por hardware (Intel VT-x o AMD-V) activada en la BIOS. Además, cada anfitrión debe contar con unos 8\,GB de RAM libres, para poder asignar 4\,GB a la máquina virtual, y unos 50\,GB de espacio en disco.
+
+El soporte de virtualización se comprueba con el siguiente comando, válido en ambos anfitriones:
+
+\begin{lstlisting}[language=bash]
+grep -Ec '(vmx|svm)' /proc/cpuinfo
+\end{lstlisting}
+
+Un resultado mayor que \texttt{0} indica que el procesador admite virtualización. Si el resultado es \texttt{0}, es necesario activarla en la BIOS. Se utiliza \texttt{grep -E} en lugar de \texttt{egrep}, ya que este último está obsoleto y muestra un aviso en las versiones recientes de \texttt{grep}. Cabe señalar que Qemu/KVM no se ejecuta de forma nativa en Windows ni en macOS; en esos casos sería necesario recurrir a una máquina Linux intermedia.
+
+% --------------------------------------------------
+\subsection{Instalación del hipervisor Qemu/KVM}
+
+En cada anfitrión se instalan Qemu/KVM y las herramientas de gestión de libvirt con su gestor de paquetes, y se añade el usuario a los grupos \texttt{libvirt} y \texttt{kvm} para que pueda administrar máquinas virtuales sin privilegios de superusuario.
+
+\subsubsection{Anfitrión Debian}
+
+\begin{lstlisting}[language=bash]
+sudo apt update
+sudo apt install qemu-system-x86 qemu-utils libvirt-daemon-system libvirt-clients virtinst virt-manager
+sudo usermod -aG libvirt,kvm $USER
+\end{lstlisting}
+
+En Debian, el paquete \texttt{libvirt-daemon-system} habilita e inicia el servicio \texttt{libvirtd} automáticamente. La Figura~\ref{fig:debian-kvm-1} muestra la instalación de los paquetes y la Figura~\ref{fig:debian-kvm-2}, la incorporación del usuario a los grupos.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{installqemukvm.png}
+    \caption{Instalación de Qemu/KVM y libvirt en el anfitrión Debian}
+    \label{fig:debian-kvm-1}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.65\textwidth]{installqemukvm2.png}
+    \caption{Usuario añadido a los grupos libvirt y kvm en el anfitrión Debian}
+    \label{fig:debian-kvm-2}
+\end{figure}
+
+\subsubsection{Anfitrión CachyOS}
+
+\begin{lstlisting}[language=bash]
+sudo pacman -S --needed qemu-desktop libvirt virt-install virt-manager dnsmasq
+sudo systemctl enable --now libvirtd.service
+sudo usermod -aG libvirt,kvm $USER
+\end{lstlisting}
+
+A diferencia de Debian, en las distribuciones basadas en Arch los servicios no se activan al instalarlos, por lo que \texttt{libvirtd} se habilita manualmente. El paquete \texttt{dnsmasq} es necesario para que funcione la red NAT por defecto de libvirt, que proporciona DHCP y DNS a las máquinas virtuales.
+
+\subsubsection{Configuración común}
+
+Para que la pertenencia a los nuevos grupos tenga efecto es necesario cerrar sesión y volver a iniciarla.
+
+Por defecto, \texttt{virsh} ejecutado sin \texttt{sudo} se conecta a la instancia de sesión del usuario (\texttt{qemu:///session}) y no a la del sistema, donde se crea la máquina virtual. Para que todos los comandos \texttt{virsh} de este documento actúen sobre la misma instancia, se define la conexión por defecto. La sintaxis depende del intérprete de órdenes de cada anfitrión:
+
+\begin{lstlisting}[language=bash]
+# Debian (bash)
+echo 'export LIBVIRT_DEFAULT_URI=qemu:///system' >> ~/.bashrc
+
+# CachyOS (fish)
+set -Ux LIBVIRT_DEFAULT_URI qemu:///system
+\end{lstlisting}
+
+\begin{cabezazo}{\texttt{virsh} no encuentra la máquina virtual}{cab:virsh}
+\problema Antes de definir esta variable, \cmd{virsh shutdown delfos} respondía
+«error: incorrecto al obtener dominio 'delfos'», aunque la máquina existía.
+
+\causa La máquina se creó con \cmd{virt-install --connect qemu:///system}, pero
+\cmd{virsh} sin \cmd{sudo} se conecta a la instancia de sesión del usuario
+(\cmd{qemu:///session}), que no la ve.
+
+\solucion Indicar la conexión (\cmd{virsh -c qemu:///system ...}) o fijarla por
+defecto con \texttt{LIBVIRT\_DEFAULT\_URI}, como se ha hecho arriba.
+\end{cabezazo}
+
+A continuación se activa la red virtual \texttt{default} de libvirt y se marca para que arranque automáticamente. Si ya estaba activa, el primer comando lo indica y puede ignorarse:
+
+\begin{lstlisting}[language=bash]
+sudo virsh net-start default
+sudo virsh net-autostart default
+\end{lstlisting}
+
+Por último, se verifica la instalación en ambos anfitriones:
+
+\begin{lstlisting}[language=bash]
+virt-host-validate qemu
+systemctl status libvirtd
+virsh net-list --all
+virsh list --all
+\end{lstlisting}
+
+La herramienta \texttt{virt-host-validate}, incluida en libvirt, sustituye a \texttt{kvm-ok}, que forma parte del paquete \texttt{cpu-checker} de Ubuntu y no está disponible en CachyOS. Las comprobaciones \textit{hardware virtualization} y \texttt{/dev/kvm} deben mostrar \texttt{PASS}; los avisos (\texttt{WARN}) relativos a IOMMU o a cifrado de invitados no afectan a este proyecto. El servicio \texttt{libvirtd} debe encontrarse activo y la red \texttt{default}, en estado activo y con inicio automático.
+
+\captura{verificacionlibvirt.png}{Servicio \texttt{libvirtd} activo en el anfitrión CachyOS, con \texttt{dnsmasq} dando servicio a la red \texttt{default}}{fig:libvirt}
+
+% --------------------------------------------------
+\subsection{Obtención de Ubuntu Server LTS}
+
+Como sistema operativo del servidor se ha elegido la última versión LTS (\textit{Long Term Support}) de Ubuntu Server en ambos anfitriones, por ofrecer soporte y actualizaciones de seguridad a largo plazo, algo deseable en un servidor de bases de datos. La imagen ISO se descarga desde la web oficial, \url{https://ubuntu.com/download/server}, y se guarda en el directorio \texttt{\textasciitilde/isos/}.
+
+Antes de utilizarla se verifica su integridad, comparando el resumen SHA-256 con el publicado por Canonical:
+
+\begin{lstlisting}[language=bash]
+sha256sum ubuntu-*.iso
+\end{lstlisting}
+
+Esta comprobación garantiza que la imagen no se ha corrompido durante la descarga ni ha sido alterada. También puede hacerse de forma automática pasando el hash oficial a \texttt{shasum --check}, que responde \texttt{OK} si coincide (Figura~\ref{fig:iso}).
+
+\captura{verificacioniso.png}{Verificación del SHA-256 de \texttt{ubuntu-26.04.1-live-server-amd64.iso}}{fig:iso}
+
+Una vez verificada, la imagen se copia al directorio de imágenes de libvirt. El proceso de Qemu se ejecuta con un usuario propio del sistema que, en CachyOS, no tiene permiso para leer el directorio personal del usuario, de modo que conviene ubicar la ISO en una ruta común a ambos anfitriones:
+
+\begin{lstlisting}[language=bash]
+sudo cp ~/isos/ubuntu-26.04-live-server-amd64.iso /var/lib/libvirt/images/
+\end{lstlisting}
+
+% --------------------------------------------------
+\subsection{Diseño de la red}
+
+Uno de los requisitos del proyecto es poder conectarse al servidor como administrador de forma remota y mediante un cliente Oracle desde otra máquina. Por ello, la elección del modo de red de la máquina virtual condiciona el resto del despliegue. La Tabla~\ref{tab:red} recoge las dos alternativas valoradas.
+
+\begin{table}[!htbp]
+    \centering
+    \begin{tabularx}{\textwidth}{L{3.5cm} Y Y}
+        \toprule
+        \textbf{Modo} & \textbf{Ventaja} & \textbf{Inconveniente} \\
+        \midrule
+        NAT (por defecto en libvirt) & Funciona en cualquier situación, sin configuración adicional. & Solo el anfitrión ve la VM; el acceso desde otras máquinas requiere reenvío de puertos. \\
+        \addlinespace
+        Puente (\textit{bridge}) & La VM obtiene una IP propia en la red local y es accesible como un equipo más. & No funciona sobre Wi-Fi; requiere conexión cableada. \\
+        \bottomrule
+    \end{tabularx}
+    \caption{Comparativa de los modos de red de la máquina virtual}
+    \label{tab:red}
+\end{table}
+
+Con NAT, el acceso remoto se consigue reenviando los puertos 22 (SSH) y 1521 (\textit{listener} de Oracle) del anfitrión hacia la máquina virtual mediante reglas de \texttt{iptables} o \texttt{nftables}.
+
+Con el modo puente, en cambio, se crea la interfaz \texttt{br0} en el anfitrión y la máquina virtual queda conectada directamente a la red local. Ninguno de los dos anfitriones utiliza netplan, por lo que el puente se crea con NetworkManager mediante \texttt{nmcli}, disponible por defecto en CachyOS y en Debian con entorno de escritorio. El nombre de la interfaz física (\texttt{enp56s0} en este caso) y el de la conexión cableada original se consultan antes con \texttt{nmcli device} y \texttt{nmcli connection show}:
+
+\begin{lstlisting}[language=bash]
+sudo nmcli connection add type bridge ifname br0 con-name br0 bridge.stp no
+sudo nmcli connection add type bridge-slave ifname enp56s0 master br0
+sudo nmcli connection down "Conexión cableada 1"
+sudo nmcli connection up br0
+\end{lstlisting}
+
+En un anfitrión Debian sin NetworkManager, el puente se define en \texttt{/etc/network/interfaces}, tras instalar el paquete \texttt{bridge-utils} y eliminar la configuración propia de la interfaz física:
+
+\begin{lstlisting}
+auto br0
+iface br0 inet dhcp
+    bridge_ports enp56s0
+    bridge_stp off
+\end{lstlisting}
+
+Además, el anfitrión CachyOS tiene \texttt{ufw} activado por defecto, que puede bloquear el tráfico reenviado de las máquinas virtuales en modo NAT. En ese caso se permite el tráfico de la interfaz virtual de libvirt:
+
+\begin{lstlisting}[language=bash]
+sudo ufw allow in on virbr0
+sudo ufw route allow in on virbr0
+sudo ufw route allow out on virbr0
+\end{lstlisting}
+
+En nuestro caso se ha optado por el modo \textbf{puente}, ya que el anfitrión está conectado por cable a la red local y así la máquina virtual es accesible directamente desde cualquier equipo de la red, sin reglas de reenvío, lo que simplifica la conexión remota con el cliente Oracle que exige el proyecto. Esta decisión se ha tomado al comienzo del proyecto, puesto que modificar la red una vez configurado el servidor obligaría a rehacer parte de la configuración.
+
+% --------------------------------------------------
+\subsection{Creación de la máquina virtual}
+
+La máquina virtual se crea con \texttt{virt-install}, con el mismo comando en ambos anfitriones. El siguiente corresponde a la configuración con el puente \texttt{br0}; en el caso de NAT, la opción \texttt{--network} toma el valor \texttt{network=default}:
+
+\begin{lstlisting}[language=bash]
+sudo virt-install \
+  --name delfos \
+  --memory 4096 \
+  --vcpus 2 \
+  --cpu host-passthrough \
+  --disk size=40,format=qcow2,bus=virtio \
+  --cdrom /var/lib/libvirt/images/ubuntu-26.04-live-server-amd64.iso \
+  --os-variant ubuntu24.04 \
+  --network bridge=br0,model=virtio \
+  --graphics spice
+\end{lstlisting}
+
+\begin{cabezazo}{\texttt{virt-install}: «No existe el dispositivo» \texttt{br0}}{cab:br0}
+\problema La creación de la máquina virtual falla con «No se puede obtener MTU
+del interfaz en 'br0': No existe el dispositivo» (Figura~\ref{fig:br0err}).
+
+\causa Primero, el puente \cmd{br0} no existía en el anfitrión. Después de
+crearlo con \cmd{nmcli connection add}, el error se repitió porque las conexiones
+\cmd{br0} y \cmd{br0-slave} estaban \emph{definidas} pero no \emph{activadas}:
+en \cmd{nmcli con show} no tenían dispositivo asociado.
+
+\solucion Activar el puente en una sola orden, para no quedarse sin red a
+mitad del cambio, y comprobar con \cmd{ip -br link} que \cmd{br0} existe antes
+de repetir \cmd{virt-install} (Figura~\ref{fig:br0ok}):
+
+\begin{lstlisting}[language=bash]
+sudo nmcli con down "Conexión cableada 1"; sudo nmcli con up br0-slave; sudo nmcli con up br0
+sudo nmcli con modify "Conexión cableada 1" connection.autoconnect no
+\end{lstlisting}
+\end{cabezazo}
+
+\captura[0.7\textwidth]{cabezazovirt.png}{\texttt{virt-install} falla porque \texttt{br0} no existe}{fig:br0err}
+\captura{solcabezazovirt.png}{Con el puente activado, \texttt{virt-install} crea el dominio y abre la consola}{fig:br0ok}
+
+Los recursos asignados se justifican de la siguiente manera:
+
+\begin{itemize}
+    \item \textbf{Memoria (4\,GB) y CPU (2 núcleos):} Oracle XE limita su instancia a un máximo de 2 CPU y 2\,GB de RAM, por lo que estos valores cubren sus necesidades y dejan margen al sistema operativo.
+    \item \textbf{Disco (40\,GB, formato qcow2):} el software de Oracle XE ocupa entre 6 y 7\,GB, y la base de datos y los ficheros de log crecen con el uso. El formato qcow2 reserva el espacio de forma dinámica y permite crear snapshots.
+    \item \textbf{Controladores virtio:} tanto el disco como la interfaz de red usan controladores paravirtualizados, que ofrecen mejor rendimiento que los dispositivos emulados.
+\end{itemize}
+
+Los valores admitidos por \texttt{--os-variant} dependen de la base de datos \texttt{osinfo-db} instalada, que suele ser más reciente en CachyOS que en Debian. Si la versión de Ubuntu no figura en la lista, que se consulta con \texttt{virt-install --osinfo list}, se utiliza la versión más próxima.
+
+% --------------------------------------------------
+\subsection{Instalación de Ubuntu Server}
+
+Durante la instalación del sistema operativo se seleccionaron las siguientes opciones:
+
+\begin{itemize}
+    \item \textbf{Idioma y teclado:} español.
+    \item \textbf{Tipo de instalación:} Ubuntu Server estándar, no minimizada, para disponer de las herramientas habituales de administración.
+    \item \textbf{Red:} configuración por DHCP; la IP fija se establece tras la instalación.
+    \item \textbf{Almacenamiento:} disco completo con LVM y los valores por defecto, lo que facilita ampliar los volúmenes más adelante. Conviene observar que, por defecto, el instalador solo asigna 19\,GB al volumen raíz y deja otros 19\,GB libres en el grupo de volúmenes (Figura~\ref{fig:disco}); esto provocó el cabezazo~\ref{cab:disco} del Apartado~\ref{sec:apartado2}.
+    \item \textbf{Perfil:} nombre de equipo \texttt{delfos} y un usuario administrador (\texttt{sercal}). Las credenciales se custodian en un gestor de contraseñas y no se incluyen en el repositorio.
+    \item \textbf{SSH:} se instala el servidor OpenSSH para la administración remota.
+    \item \textbf{Paquetes adicionales:} no se instala ningún snap adicional, para mantener el sistema lo más limpio posible.
+\end{itemize}
+
+\captura{configred.png}{Red: la interfaz \texttt{enp1s0} obtiene por DHCP la dirección 192.168.3.133/24 de la red local}{fig:instred}
+\captura[0.75\textwidth]{configdisc.png}{Almacenamiento: LVM con 19\,GB para la raíz y 19\,GB libres en \texttt{ubuntu-vg}}{fig:disco}
+\captura{configuser.png}{Perfil: servidor \texttt{delfos} y usuario administrador \texttt{sercal}}{fig:instuser}
+\captura{configssh.png}{Instalación del servidor OpenSSH}{fig:instssh}
+
+Finalizada la instalación, se reinicia la máquina y se retira la imagen ISO.
+
+% --------------------------------------------------
+\subsection{Configuración inicial del sistema}
+
+A partir de este punto, la administración se realiza por SSH desde el anfitrión con \texttt{ssh sercal@192.168.3.133}, tras consultar la dirección asignada con \texttt{ip a}. Todos los pasos siguientes se ejecutan dentro de la máquina virtual y son idénticos en ambos anfitriones.
+
+\captura[0.7\textwidth]{sercalcon.png}{Primera conexión por SSH a la máquina virtual}{fig:ssh}
+
+\subsubsection{Actualización del sistema}
+
+En primer lugar se instalan todas las actualizaciones disponibles y se reinicia el sistema:
+
+\begin{lstlisting}[language=bash]
+sudo apt update && sudo apt full-upgrade -y
+sudo reboot
+\end{lstlisting}
+
+\subsubsection{Dirección IP fija}
+
+Un servidor de bases de datos debe mantener siempre la misma dirección, ya que los clientes se conectan a ella. Para fijarla se edita el fichero de netplan, que se encuentra en \texttt{/etc/netplan/}. Su nombre puede variar; en nuestro caso es \texttt{00-installer-config.yaml}:
+
+\begin{lstlisting}
+network:
+  version: 2
+  ethernets:
+    enp1s0:
+      dhcp4: false
+      addresses: [192.168.3.133/24]
+      routes:
+        - to: default
+          via: 192.168.3.1
+      nameservers:
+        addresses: [1.1.1.1, 8.8.8.8]
+\end{lstlisting}
+
+El fichero generado por el instalador incluye además un bloque \texttt{match} por dirección MAC con \texttt{set-name}, que se conserva tal cual. Antes de editarlo se consulta la red actual con \texttt{ip -br a} e \texttt{ip route} y se guarda una copia de seguridad (Figura~\ref{fig:netplanprev}).
+
+\captura[0.8\textwidth]{ipfija.png}{Configuración DHCP original, dirección y puerta de enlace actuales, y copia de seguridad}{fig:netplanprev}
+
+Los cambios se aplican con \texttt{sudo netplan try}, que revierte la configuración automáticamente a los 120 segundos si no se confirma, de modo que un error no deja la máquina incomunicada. Una vez comprobado, la configuración queda aplicada de forma permanente. La dirección elegida está libre en la red y fuera del rango que reparte el servidor DHCP del router, para evitar conflictos. Si cada miembro del grupo trabaja en una red distinta, la dirección, la puerta de enlace y la máscara se adaptan a la red de cada anfitrión.
+
+\begin{cabezazo}{\texttt{netplan try} revierte la IP fija}{cab:netplan}
+\problema Tras el primer \cmd{sudo netplan try} la máquina pierde la conexión y
+netplan termina con «Reverting» (Figura~\ref{fig:netplanrev}).
+
+\causa Se copió una configuración de ejemplo con la dirección
+\cmd{192.168.1.50/24} y la puerta de enlace \cmd{192.168.1.1}
+(Figura~\ref{fig:netplanmal}), pero la red real es \cmd{192.168.3.0/24}, con
+puerta de enlace \cmd{192.168.3.1}.
+
+\solucion Usar los valores reales obtenidos con \cmd{ip -br a} e
+\cmd{ip route | grep default}: \cmd{192.168.3.133/24} y \cmd{192.168.3.1}
+(Figura~\ref{fig:netplanok}). Gracias a \cmd{netplan try}, el error se
+deshizo solo sin necesidad de acceder por consola.
+\end{cabezazo}
+
+\captura[0.45\textwidth]{netplanconfig.png}{Configuración errónea: dirección y puerta de enlace de otra red}{fig:netplanmal}
+\captura[0.75\textwidth]{ipfija2.png}{El primer \texttt{netplan try} se revierte; el segundo se acepta}{fig:netplanrev}
+\captura[0.45\textwidth]{cabezazoipsol.png}{Configuración correcta de la IP fija}{fig:netplanok}
+
+\subsubsection{Nombre completo del equipo}
+
+Oracle utiliza el nombre completo del equipo (FQDN) durante su configuración, por lo que se asocia la IP fija al nombre \texttt{delfos.inf} en el fichero \texttt{/etc/hosts}:
+
+\begin{lstlisting}
+192.168.3.133   delfos.inf delfos
+\end{lstlisting}
+
+A continuación se comprueba que \texttt{hostname -f} devuelve \texttt{delfos.inf}. En caso contrario, se establece con:
+
+\begin{lstlisting}[language=bash]
+sudo hostnamectl set-hostname delfos.inf
+\end{lstlisting}
+
+La misma línea se añade al fichero \texttt{/etc/hosts} de cada anfitrión, de modo que el servidor sea accesible por su nombre. Este fichero tiene el mismo formato en Debian y en CachyOS.
+
+\captura[0.7\textwidth]{host.png}{El anfitrión resuelve \texttt{delfos.inf} a 192.168.3.133}{fig:hosts}
+
+\subsubsection{Zona horaria}
+
+Se configura la zona horaria de Madrid para que las marcas de tiempo de los logs y de la base de datos sean coherentes:
+
+\begin{lstlisting}[language=bash]
+sudo timedatectl set-timezone Europe/Madrid
+\end{lstlisting}
+
+\subsubsection{Memoria de intercambio}
+
+Oracle requiere al menos 2\,GB de memoria de intercambio. Tras comprobar el espacio disponible con \texttt{free -h}, y al ser inferior a ese valor, se crea un fichero de intercambio y se registra en \texttt{/etc/fstab} para que se active en cada arranque:
+
+\begin{lstlisting}[language=bash]
+sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile
+sudo mkswap /swapfile && sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+\end{lstlisting}
+
+\subsubsection{Cortafuegos}
+
+Siguiendo el principio de mínima exposición, el cortafuegos se activa permitiendo únicamente el acceso por SSH. El puerto 1521 se abrirá más adelante, una vez configurado el \textit{listener} de Oracle.
+
+\begin{lstlisting}[language=bash]
+sudo ufw allow OpenSSH && sudo ufw enable
+\end{lstlisting}
+
+% --------------------------------------------------
+\subsection{Preparación de la arquitectura OFA}
+
+OFA (\textit{Optimal Flexible Architecture}) es el estándar de Oracle para organizar los usuarios, los grupos y los directorios de una instalación, con el fin de facilitar su mantenimiento y la convivencia de varias versiones. En las distribuciones soportadas oficialmente, Oracle proporciona un paquete \textit{preinstall} que realiza esta preparación de forma automática; al no existir para Ubuntu, se ha llevado a cabo manualmente.
+
+\begin{cabezazo}{No existe el paquete \textit{preinstall} para Ubuntu}{cab:preinstall}
+\problema Ubuntu no dispone de \cmd{oracle-database-preinstall-21c}, y el
+directorio \cmd{/etc/sysctl.d} solo contiene un \cmd{README.sysctl}.
+
+\causa Oracle solo publica ese paquete para Oracle Linux y Red Hat.
+
+\solucion Crear a mano todo lo que el paquete haría: grupos, usuario
+\cmd{oracle}, directorios OFA, \cmd{/etc/sysctl.d/99-oracle.conf},
+\cmd{/etc/security/limits.d/oracle.conf} y variables de entorno, como se
+describe a continuación.
+\end{cabezazo}
+
+\subsubsection{Grupos y usuario}
+
+Se crean los grupos del sistema que define Oracle (\texttt{oinstall} para la instalación, \texttt{dba} para la administración y \texttt{oper} para las operaciones básicas) y el usuario \texttt{oracle}, propietario del software:
+
+\begin{lstlisting}[language=bash]
+sudo groupadd -g 54321 oinstall
+sudo groupadd -g 54322 dba
+sudo groupadd -g 54323 oper
+sudo useradd -u 54321 -g oinstall -G dba,oper -m -s /bin/bash oracle
+sudo passwd oracle
+\end{lstlisting}
+
+Se utilizan los identificadores 54321--54323, que son los que Oracle emplea por defecto en sus propios sistemas.
+
+\subsubsection{Dependencias}
+
+Se instalan las bibliotecas y herramientas que necesita el instalador de Oracle:
+
+\begin{lstlisting}[language=bash]
+sudo apt install -y libaio1t64 bc alien unixodbc net-tools ksh make gcc binutils
+\end{lstlisting}
+
+El paquete \texttt{alien} permite convertir el instalador de Oracle, distribuido en formato RPM, a un paquete instalable en Ubuntu. En versiones anteriores de Ubuntu, la biblioteca \texttt{libaio1t64} recibe el nombre de \texttt{libaio1}.
+
+\captura{prepofa1.png}{Creación de grupos y usuario \texttt{oracle} e instalación de dependencias}{fig:ofa}
+
+\subsubsection{Estructura de directorios}
+
+Se crea la jerarquía de directorios OFA y se asigna su propiedad al usuario \texttt{oracle} y al grupo \texttt{oinstall}:
+
+\begin{lstlisting}[language=bash]
+sudo mkdir -p /opt/oracle/product/21c/dbhomeXE
+sudo mkdir -p /opt/oracle/oradata
+sudo mkdir -p /opt/oracle/admin
+sudo mkdir -p /opt/oraInventory
+sudo chown -R oracle:oinstall /opt/oracle /opt/oraInventory
+sudo chmod -R 775 /opt/oracle /opt/oraInventory
+\end{lstlisting}
+
+La Tabla~\ref{tab:ofa} describe la función de cada directorio.
+
+\begin{table}[!htbp]
+    \centering
+    \begin{tabularx}{\textwidth}{L{7cm} Y}
+        \toprule
+        \textbf{Directorio} & \textbf{Función} \\
+        \midrule
+        \texttt{/opt/oracle} & Directorio base de Oracle (\texttt{ORACLE\_BASE}). \\
+        \texttt{/opt/oracle/product/21c/dbhomeXE} & Directorio del software (\texttt{ORACLE\_HOME}). \\
+        \texttt{/opt/oracle/oradata} & Ficheros de datos de la base de datos. \\
+        \texttt{/opt/oracle/admin} & Ficheros de administración y diagnóstico. \\
+        \texttt{/opt/oraInventory} & Inventario central de productos Oracle instalados. \\
+        \bottomrule
+    \end{tabularx}
+    \caption{Estructura de directorios OFA}
+    \label{tab:ofa}
+\end{table}
+
+\subsubsection{Parámetros del kernel}
+
+Oracle necesita ajustar varios parámetros del kernel relacionados con la memoria compartida, los semáforos, el número de ficheros abiertos y la red. Se definen en el fichero \path{/etc/sysctl.d/99-oracle.conf}:
+
+\begin{lstlisting}
+fs.file-max = 6815744
+kernel.sem = 250 32000 100 128
+kernel.shmmni = 4096
+kernel.shmall = 1073741824
+kernel.shmmax = 4398046511104
+net.core.rmem_default = 262144
+net.core.rmem_max = 4194304
+net.core.wmem_default = 262144
+net.core.wmem_max = 1048576
+fs.aio-max-nr = 1048576
+net.ipv4.ip_local_port_range = 9000 65500
+\end{lstlisting}
+
+Los valores se cargan sin necesidad de reiniciar con \texttt{sudo sysctl --system}.
+
+\captura[0.6\textwidth]{configoracle.png}{Fichero \texttt{/etc/sysctl.d/99-oracle.conf}}{fig:sysctl}
+
+\subsubsection{Límites de recursos del usuario oracle}
+
+Se amplían los límites de ficheros abiertos, procesos y tamaño de pila del usuario \texttt{oracle} en el fichero \texttt{/etc/security/limits.d/oracle.conf}:
+
+\begin{lstlisting}
+oracle soft nofile 1024
+oracle hard nofile 65536
+oracle soft nproc 16384
+oracle hard nproc 16384
+oracle soft stack 10240
+oracle hard stack 32768
+\end{lstlisting}
+
+\captura[0.6\textwidth]{limitsconfig.png}{Fichero \texttt{/etc/security/limits.d/oracle.conf}}{fig:limits}
+
+\subsubsection{Variables de entorno}
+
+Por último, se definen las variables de entorno de Oracle al final del fichero \path{/home/oracle/.bash_profile}, de forma que estén disponibles en cada inicio de sesión del usuario:
+
+\begin{lstlisting}[language=bash]
+export ORACLE_BASE=/opt/oracle
+export ORACLE_HOME=$ORACLE_BASE/product/21c/dbhomeXE
+export ORACLE_SID=XE
+export PATH=$ORACLE_HOME/bin:$PATH
+export LD_LIBRARY_PATH=$ORACLE_HOME/lib
+export NLS_LANG=SPANISH_SPAIN.AL32UTF8
+\end{lstlisting}
+
+La variable \texttt{NLS\_LANG} establece el idioma español y la codificación UTF-8 en el cliente, lo que evita problemas con los acentos y caracteres especiales.
+
+\captura[0.6\textwidth]{bashprofile.png}{Variables de entorno en \texttt{/home/oracle/.bash\_profile}}{fig:bashprofile}
+
+% --------------------------------------------------
+\subsection{Snapshot del estado preparado}
+
+Con el sistema ya preparado y antes de instalar Oracle, se crea un snapshot de la máquina virtual. De este modo, si se produce algún error durante la instalación, es posible restaurar este estado en lugar de repetir todo el proceso. El snapshot se crea desde el anfitrión con la máquina apagada; los comandos son los mismos en Debian y en CachyOS gracias a la variable \texttt{LIBVIRT\_DEFAULT\_URI} definida anteriormente:
+
+\begin{lstlisting}[language=bash]
+virsh shutdown delfos
+virsh snapshot-create-as delfos --name "s1-preparada-pre-oracle" --description "Ubuntu + OFA, sin Oracle"
+virsh snapshot-list delfos
+\end{lstlisting}
+
+En caso necesario, la restauración se realiza con:
+
+\begin{lstlisting}[language=bash]
+virsh snapshot-revert delfos s1-preparada-pre-oracle
+\end{lstlisting}
+
+Dado que se trata de snapshots internos del formato qcow2, no deben combinarse con copias manuales del fichero de disco, ya que podrían quedar en un estado inconsistente.
+
+\captura[0.75\textwidth]{snap1.png}{Máquina apagada e instantánea \texttt{s1-preparada-pre-oracle} creada}{fig:snap1}
+
+% --------------------------------------------------
+\subsection{Verificación}
+
+Para dar por concluido el apartado se han realizado en ambos anfitriones las comprobaciones de la Tabla~\ref{tab:verif1}, todas ellas con resultado satisfactorio.
+
+\begin{table}[!htbp]
+    \centering
+    \small
+    \begin{tabularx}{\textwidth}{L{3.6cm} L{4.6cm} Y}
+        \toprule
+        \textbf{Comprobación} & \textbf{Comando} & \textbf{Resultado esperado} \\
+        \midrule
+        Virtualización del anfitrión & \texttt{virt-host-validate qemu} & \texttt{PASS} en virtualización por hardware y \texttt{/dev/kvm} \\
+        Servicio libvirt & \texttt{systemctl status libvirtd} & Activo \\
+        Red de libvirt & \texttt{virsh net-list --all} & Red \texttt{default} activa y con inicio automático \\
+        Integridad de la ISO & \texttt{sha256sum} & Coincide con el hash oficial \\
+        Acceso remoto & \texttt{ssh sercal\,@\,delfos.inf} & Sesión iniciada correctamente \\
+        Nombre del equipo & \texttt{hostname -f} & \texttt{delfos.inf} \\
+        Memoria swap & \texttt{free -h} & Swap $\geq$ 2\,GB \\
+        Usuario y grupos & \texttt{id oracle} & Grupos \texttt{oinstall}, \texttt{dba} y \texttt{oper} \\
+        Directorios OFA & \texttt{ls -l /opt/oracle} & Propietario \texttt{oracle:oinstall} \\
+        Parámetros del kernel & \texttt{sysctl fs.aio-max-nr} & \texttt{1048576} \\
+        Límites de recursos & \texttt{ulimit -Hn} (como \texttt{oracle}) & \texttt{65536} \\
+        Variables de entorno & \texttt{echo \$ORACLE\_HOME} & Ruta de \texttt{dbhomeXE} \\
+        Snapshot & \texttt{virsh snapshot-list delfos} & Aparece \texttt{s1-preparada-pre-oracle} \\
+        \bottomrule
+    \end{tabularx}
+    \caption{Comprobaciones del Apartado 1}
+    \label{tab:verif1}
+\end{table}
+
+Los comandos ejecutados se han recogido en el script \path{scripts/01-preparar-ubuntu.sh}, y los ficheros de configuración de netplan, sysctl y límites se encuentran en la carpeta \texttt{config/} del repositorio.

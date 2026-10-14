@@ -1,27 +1,197 @@
-% =====================================================================
-% main.tex — Tutorial del mini proyecto delfos-bahia (ASGBD)
-% Compilar con: pdflatex main.tex (dos veces, para índices y referencias)
-% Si ya tenéis vuestro documento principal, basta con:
-%   - \input{estilo} en el preámbulo (o copiar lo que falte),
-%   - \input{semana2} y \input{cabezazos} donde corresponda,
-%   - copiar la carpeta img/semana2.
-% =====================================================================
-\documentclass[11pt,a4paper,oneside]{report}
-\input{estilo}
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-tabla]{babel}
+\usepackage[top=2.5cm,bottom=2.5cm,left=2.5cm,right=2.5cm]{geometry}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{tabularx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{titletoc}
+\usepackage{microtype}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{xurl}
+\usepackage{hyperref}
 
-\title{\textbf{delfos-bahia}\\[4pt]
-\large Despliegue de Oracle XE 21c en \texttt{delfos.inf}\\
-y creación de la base de datos BAHIA.inf}
-\author{Ale Serrano \and Pedro Catalán\\[4pt]
-\small 2º ASIR · Administración de Sistemas Gestores de Bases de Datos}
-\date{Entrega: 4 de noviembre de 2026}
+% Carpeta donde se guardan las capturas de pantalla
+\graphicspath{{Images/Semana1/}{Images/Semana2/}}
+
+% Paleta de colores para listados y enlaces
+\definecolor{codebg}{rgb}{0.96,0.97,0.98}
+\definecolor{codeframe}{rgb}{0.85,0.87,0.90}
+\definecolor{codecomment}{rgb}{0.45,0.50,0.55}
+\definecolor{codekeyword}{rgb}{0.10,0.35,0.75}
+\definecolor{codestring}{rgb}{0.20,0.55,0.25}
+\definecolor{navyblue}{rgb}{0.05,0.20,0.45}
+
+% Configuración de hyperref
+\hypersetup{
+    colorlinks=true,
+    linkcolor=navyblue,
+    citecolor=navyblue,
+    urlcolor=teal,
+    pdftitle={Despliegue del servidor delfos y exportacion a Postgres},
+    pdfauthor={Alejandro Serrano Cabrera, Pedro Catalan Catalan}
+}
+
+% Configuración del paquete listings
+\lstdefinestyle{customcode}{
+    backgroundcolor=\color{codebg},
+    commentstyle=\color{codecomment}\itshape,
+    keywordstyle=\color{codekeyword}\bfseries,
+    stringstyle=\color{codestring},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,
+    breaklines=true,
+    captionpos=b,
+    keepspaces=true,
+    showspaces=false,
+    showstringspaces=false,
+    showtabs=false,
+    tabsize=2,
+    frame=single,
+    rulecolor=\color{codeframe},
+    frameround=tttt,
+    % Permite acentos y eñes dentro de los bloques de código
+    literate={á}{{\'a}}1 {é}{{\'e}}1 {í}{{\'i}}1 {ó}{{\'o}}1 {ú}{{\'u}}1
+             {Á}{{\'A}}1 {É}{{\'E}}1 {Í}{{\'I}}1 {Ó}{{\'O}}1 {Ú}{{\'U}}1
+             {ñ}{{\~n}}1 {Ñ}{{\~N}}1 {ü}{{\"u}}1
+}
+\lstset{style=customcode}
+
+% Columnas con alineación a la izquierda y ajuste automático de línea
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+
+% Macro segura para barras invertidas en rutas con punto de ruptura automático
+\newcommand{\bs}{\textbackslash\allowbreak}
+
+% Configuración de cabeceras y pies de página
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{\footnotesize \textbf{I.E.S. Fernando Aguilar Quignon} --- ASGBD}
+\rhead{\footnotesize Despliegue del servidor delfos}
+\cfoot{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0.4pt}
+
+% Las secciones se muestran como "Apartado N." en el texto y en el índice
+\titleformat{\section}{\normalfont\Large\bfseries\color{navyblue}}{Apartado \thesection.}{0.6em}{}
+\titlecontents{section}[0em]{\addvspace{0.8em}\bfseries}{Apartado \thecontentslabel.\enspace}{}{\titlerule*[0.6pc]{.}\contentspage}
+
+
+% ==================== AÑADIDOS PARA APARTADO 2 Y LOG DE CABEZAZOS ====================
+\usepackage[most]{tcolorbox}
+\usepackage{xltabular}
+\usepackage{colortbl}
+
+\definecolor{rojocab}{HTML}{B3261E}
+\definecolor{verdesol}{HTML}{1E7B34}
+
+% Estilos de listado usados en el Apartado 2 (heredan el estilo común)
+\lstdefinestyle{bash}{style=customcode, language=bash}
+\lstdefinestyle{sql}{style=customcode, language=SQL}
+\lstdefinestyle{fichero}{style=customcode}
+
+% Cuadro de cabezazo: \begin{cabezazo}[opciones]{Título}{etiqueta} ... \end{cabezazo}
+\newcounter{cabezazo}
+\newtcolorbox{cabezazo}[3][]{%
+  enhanced, breakable, #1,
+  colback=rojocab!4, colframe=rojocab, boxrule=0.6pt, arc=2pt,
+  left=6pt, right=6pt, top=4pt, bottom=4pt,
+  fonttitle=\bfseries\small, coltitle=white,
+  title={\refstepcounter{cabezazo}\label{#3}Cabezazo \thecabezazo: #2},
+  before upper={\small}
+}
+\newcommand{\problema}{\textbf{\textcolor{rojocab}{Problema.}}~}
+\newcommand{\causa}{\par\smallskip\textbf{Causa.}~}
+\newcommand{\solucion}{\par\smallskip\textbf{\textcolor{verdesol}{Solución.}}~}
+
+% Captura de pantalla: \captura[ancho]{fichero}{pie}{etiqueta}
+\newcommand{\captura}[4][0.9\textwidth]{%
+  \begin{figure}[H]
+    \centering
+    \includegraphics[width=#1,height=0.42\textheight,keepaspectratio]{#2}
+    \caption{#3}\label{#4}
+  \end{figure}}
+
+% Comando en línea (admite _ y $ sin escapar; no usar # ni %)
+\newcommand{\cmd}[1]{\texttt{\detokenize{#1}}}
+% Igual, pero con puntos de corte entre caracteres (tablas estrechas)
+\ExplSyntaxOn
+\cs_new_protected:Npn \delfos_cmdbreak:n #1
+  { \str_map_inline:nn {#1} { ##1 \penalty 200 \hskip 0pt \relax } }
+\NewDocumentCommand \cmdb { m } { \texttt { \delfos_cmdbreak:n {#1} } }
+\ExplSyntaxOff
+
+\setlength{\emergencystretch}{3em}
 
 \begin{document}
-\maketitle
-\tableofcontents
 
-% \input{semana1}   % <- capítulo de la semana 1 (VM, red y preparación OFA)
-\input{semana2}
-\input{cabezazos}
+% ==================== PORTADA ====================
+\begin{titlepage}
+    \centering
+    \vspace*{1.0cm}
+    {\Huge \textbf{I.E.S. Fernando Aguilar Quignon}}\\[0.4cm]
+    
+    {\Large \textbf{Administración de Sistemas Informáticos en Red (ASIR)}}\\[0.3cm]
+    {\large Módulo: Administración de Sistemas Gestores de Bases de Datos (1ª Evaluación)}\\[0.2cm]
+    \vspace*{1.0cm}
+    \rule{\linewidth}{0.5mm}\\[0.4cm]
+        \vspace*{0.5cm}
+    {\huge \bfseries Despliegue del servidor delfos y exportación a Postgres}\\[0.3cm]
+        \vspace*{0.5cm}
+    \rule{\linewidth}{0.5mm}\\[0.4cm]
+    
+    \vfill  % Empuja todo lo que sigue al final de la página
+    
+    \begin{minipage}[b]{0.48\textwidth}
+        \raggedright
+        \textbf{Autores:}\\
+        Alejandro Serrano Cabrera\\
+        Pedro Catalán Catalán
+    \end{minipage}
+    \hfill
+    \begin{minipage}[b]{0.48\textwidth}
+        \raggedleft
+        \textbf{Curso Académico:}\\
+        2026/2027
+    \end{minipage}
+\end{titlepage}
+
+% ==================== ÍNDICE ====================
+\tableofcontents
+\newpage
+\phantomsection
+% ==================== INTRODUCCIÓN ====================
+
+\section*{Introducción}
+\addcontentsline{toc}{section}{Introducción}
+
+El presente proyecto documenta el despliegue de un servidor de bases de datos Oracle Database Express Edition (XE) sobre una máquina virtual Ubuntu Server denominada \texttt{delfos.inf}, así como la posterior exportación de los datos a un sistema gestor PostgreSQL.
+
+El trabajo se ha llevado a cabo en paralelo sobre dos equipos anfitriones con distribuciones Linux diferentes: uno con Debian y otro con CachyOS, una distribución basada en Arch Linux. Ambos ejecutan el mismo hipervisor y alojan una máquina virtual idéntica, de modo que el procedimiento dentro del servidor \texttt{delfos.inf} es común. Las diferencias entre ambos entornos se limitan a la preparación del anfitrión y se indican expresamente allí donde aparecen.
+
+El trabajo se ha organizado en apartados que siguen el orden cronológico del despliegue. En cada uno se describen los objetivos, las decisiones técnicas adoptadas y su justificación, los comandos y ficheros de configuración empleados y, por último, las comprobaciones realizadas para verificar el resultado.
+
+Todos los scripts y ficheros de configuración utilizados se encuentran versionados en el repositorio GitHub del proyecto, junto con un registro de las incidencias encontradas durante el proceso y su resolución.
+
+\newpage
+
+% ==================== CONTENIDO ====================
+% Un fichero por semana. Para añadir una nueva: crear SemanaN.tex,
+% la carpeta Images/SemanaN/ y añadirla a \graphicspath.
+\input{Semana1}
+\input{Semana2}
+% \input{Semana3}
+
+% ==================== ANEXO ====================
+\input{Cabezazos}
 
 \end{document}

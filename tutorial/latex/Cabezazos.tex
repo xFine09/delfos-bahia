@@ -1,15 +1,16 @@
 % =====================================================================
-% cabezazos.tex — Log de cabezazos (todas las fases)
-% Requiere estilo.tex. Las filas de la semana 2 enlazan con los cuadros
-% detallados de semana2.tex.
+% Cabezazos.tex — Anexo: log de cabezazos de todas las semanas
+% Se incluye desde main.tex con \input; no compilar por separado.
 % =====================================================================
 
-\chapter{Log de cabezazos}
-\label{cap:cabezazos}
+% ==================== ANEXO: LOG DE CABEZAZOS ====================
+\newpage
+\section*{Anexo. Log de cabezazos}
+\addcontentsline{toc}{section}{Anexo. Log de cabezazos}
+\label{sec:cabezazos}
 
 Registro de los problemas encontrados durante el despliegue, su causa y cómo se
-resolvieron. Los de la semana 2 se explican con más detalle, junto con sus
-capturas, en el capítulo~\ref{cap:semana2}.
+resolvieron. Cada uno se explica con más detalle, junto con sus capturas, en el cuadro rojo del apartado correspondiente.
 
 {\footnotesize
 \let\cmd\cmdb
@@ -34,35 +35,31 @@ capturas, en el capítulo~\ref{cap:semana2}.
 \bottomrule
 \endlastfoot
 
-\rowcolor{gray!12}\multicolumn{6}{@{}l}{\textbf{Semana 1: máquina virtual, red y preparación OFA}} \\
+\rowcolor{gray!12}\multicolumn{6}{@{}l}{\textbf{Apartado 1: máquina virtual, red y preparación OFA}} \\
 
-1 & 06/10/2026 & VM / red &
-\cmd{virt-install} falla: «No se puede obtener MTU del interfaz en 'br0': No existe el dispositivo». &
-El bridge \cmd{br0} no existía en el anfitrión. Después de crearlo con
-\cmd{nmcli con add}, el error se repitió porque la conexión estaba definida pero
-no activada. &
-Activar el bridge con
-\texttt{nmcli con down "Conexión cableada 1"; nmcli con up br0-slave; nmcli con up br0},
-comprobar con \cmd{ip -br link} y desactivar el \emph{autoconnect} de la
-conexión antigua. Solo funciona con cable, no con Wi-Fi. \\
-
-2 & 06/10/2026 & VM &
+\ref{cab:virsh} & 06/10/2026 & VM &
 \cmd{virsh shutdown delfos} devuelve «error: incorrecto al obtener dominio 'delfos'». &
-La VM se creó en la conexión del sistema (\cmd{qemu:///system}), pero
-\cmd{virsh} sin \cmd{sudo} usa por defecto la de sesión del usuario
-(\cmd{qemu:///session}), que no la ve. &
-Usar \cmd{virsh -c qemu:///system ...} o fijar
-\cmd{export LIBVIRT_DEFAULT_URI="qemu:///system"} en el \cmd{.bashrc}. \\
+La VM se creó en \cmd{qemu:///system}, pero \cmd{virsh} sin \cmd{sudo} usa
+\cmd{qemu:///session}, que no la ve. &
+\cmd{virsh -c qemu:///system ...} o fijar \texttt{LIBVIRT\_DEFAULT\_URI}. \\
 
-3 & 06/10/2026 & OFA &
-No existe en Ubuntu el paquete \cmd{oracle-database-preinstall} que prepara el
-sistema; \cmd{/etc/sysctl.d} solo contiene un README. &
-Oracle solo publica ese paquete para Oracle Linux / RHEL. &
-Crear a mano \cmd{/etc/sysctl.d/99-oracle.conf} (parámetros del kernel),
-\cmd{/etc/security/limits.d/oracle.conf} (límites), el usuario \cmd{oracle},
-los grupos y los directorios OFA. \\
+\ref{cab:br0} & 06/10/2026 & VM / red &
+\cmd{virt-install} falla: «No se puede obtener MTU del interfaz en 'br0': No existe el dispositivo». &
+El puente no existía y, una vez creado con \cmd{nmcli con add}, estaba definido pero no activado. &
+\texttt{nmcli con down "Conexión cableada 1"; nmcli con up br0-slave; nmcli con up br0}
+y comprobar con \cmd{ip -br link}. Solo con cable. \\
 
-\rowcolor{gray!12}\multicolumn{6}{@{}l}{\textbf{Semana 2: Oracle XE 21c y BAHIA.inf}} \\
+\ref{cab:netplan} & 06/10/2026 & Ubuntu &
+El primer \cmd{netplan try} deja la VM sin red y se revierte. &
+Se copió una configuración de ejemplo (\cmd{192.168.1.50}, gateway \cmd{192.168.1.1}) de otra red. &
+Usar los valores reales: \cmd{192.168.3.133/24} y \cmd{192.168.3.1}. \\
+
+\ref{cab:preinstall} & 06/10/2026 & OFA &
+No existe \cmd{oracle-database-preinstall} para Ubuntu. &
+Oracle solo lo publica para Oracle Linux / RHEL. &
+Grupos, usuario, directorios, \cmd{sysctl} y límites creados a mano. \\
+
+\rowcolor{gray!12}\multicolumn{6}{@{}l}{\textbf{Apartado 2: Oracle XE 21c y BAHIA.inf}} \\
 
 \ref{cab:disco} & 13/10/2026 & Instalación XE &
 \cmd{alien} aborta con «No space left on device». &
@@ -157,9 +154,9 @@ Ejecutar las tareas de sistema con \cmd{sercal} (\cmd{su - sercal}). \\
 \end{xltabular}
 }
 
-\section*{Lecciones aprendidas}
+\subsection*{Lecciones aprendidas}
 
-\begin{itemize}[leftmargin=*]
+\begin{itemize}
   \item Comprobar el espacio \emph{real} disponible (\cmd{df -h /}, \cmd{vgs},
         \cmd{df -h /tmp}) antes de procesar paquetes grandes.
   \item No aplicar a ciegas recetas escritas para distribuciones antiguas: en

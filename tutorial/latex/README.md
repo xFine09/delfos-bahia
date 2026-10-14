@@ -1,11 +1,14 @@
 # Tutorial en LaTeX
 
-- `main.tex`: documento principal (compilar dos veces con `pdflatex main.tex`).
-- `estilo.tex`: paquetes, estilos de código y cajas de "cabezazo".
-- `semana2.tex`: instalación de Oracle XE 21c y creación de BAHIA.inf.
-- `cabezazos.tex`: log de cabezazos de todas las fases.
-- `img/semana2/`: capturas de la semana 2.
+- `main.tex`: preámbulo, portada, índice e introducción; reúne el resto con `\input`.
+- `Semana1.tex`: Apartado 1, preparación del entorno (VM, Ubuntu Server y OFA).
+- `Semana2.tex`: Apartado 2, instalación de Oracle XE 21c y creación de BAHIA.inf.
+- `Cabezazos.tex`: anexo con el log de cabezazos de todas las semanas.
+- `Images/SemanaN/`: capturas de cada semana.
+- `main.pdf`: vista previa compilada.
 
-Para integrarlo en otro documento: `\input{estilo}` en el preámbulo e
-`\input{semana2}` / `\input{cabezazos}` en el cuerpo.
-Requiere `texlive-lang-spanish` para el idioma (si no está, usa títulos en español igualmente).
+Se compila solo `main.tex`, dos veces: `pdflatex main.tex`.
+
+Para añadir una semana nueva: crear `SemanaN.tex`, la carpeta `Images/SemanaN/`,
+añadir la carpeta a `\graphicspath` y la línea `\input{SemanaN}` en `main.tex`.
+Los cabezazos nuevos se añaden como filas en `Cabezazos.tex`.

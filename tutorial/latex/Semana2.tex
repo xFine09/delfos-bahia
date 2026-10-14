@@ -1,21 +1,27 @@
 % =====================================================================
-% semana2.tex — Instalación de Oracle XE 21c y creación de BAHIA.inf
-% Requiere los paquetes y macros de estilo.tex.
-% Si tu documento es de clase article, cambia \chapter por \section y
-% baja un nivel el resto (\section -> \subsection, etc.).
+% Semana2.tex — Apartado 2: instalación de Oracle XE 21c y creación de BAHIA.inf
+% Se incluye desde main.tex con \input; no compilar por separado.
 % =====================================================================
 
-% Los cabezazos 1-3 corresponden a la semana 1 (ver el log del final).
-\setcounter{cabezazo}{3}
+% ==================== APARTADO 2 ====================
+\newpage
+\section{Instalación de Oracle XE 21c y creación de BAHIA.inf}
+\label{sec:apartado2}
 
-\chapter{Instalación de Oracle XE 21c y creación de BAHIA.inf}
-\label{cap:semana2}
+% --------------------------------------------------
+\subsection{Objetivos}
 
-En esta fase se instala Oracle Database 21c Express Edition sobre la máquina
-\cmd{delfos.inf} (Ubuntu Server 26.04.1 LTS) preparada en la semana anterior
-según la arquitectura OFA, y se crea la base de datos \textbf{BAHIA.inf} con los
-parámetros que pide el enunciado. Al final se instalan los esquemas de ejemplo y
-se configura el arranque automático.
+Sobre el servidor preparado en el Apartado~1 se instala Oracle Database 21c Express Edition y se crea la base de datos que pide el enunciado. Al finalizar este apartado, el entorno debe cumplir las siguientes condiciones:
+
+\begin{itemize}
+    \item Oracle Database 21c XE está instalado en el \texttt{ORACLE\_HOME} definido según OFA.
+    \item Existe la base de datos \texttt{BAHIA.inf}, con SID \texttt{XE}, juego de caracteres \texttt{AL32UTF8} y bloque de 8\,KB.
+    \item Se conservan los scripts de creación generados por DBCA.
+    \item Están instalados los esquemas de ejemplo.
+    \item La base de datos y el \textit{listener} arrancan automáticamente con el sistema.
+\end{itemize}
+
+La Tabla~\ref{tab:bahia} resume la configuración final.
 
 \begin{table}[H]
 \centering\small
@@ -45,7 +51,7 @@ Como regla de trabajo durante toda la fase: \textbf{lo que necesita
 tiene privilegios de administración.
 
 % ---------------------------------------------------------------------
-\section{Descarga y verificación del software}
+\subsection{Descarga y verificación del software}
 \label{sec:descarga}
 
 El paquete se descarga de la web de Oracle (se necesita una cuenta gratuita).
@@ -75,7 +81,7 @@ scp oracle-database-xe-21c-1.0-1.ol8.x86_64.rpm sercal@delfos.inf:~/
 \captura{scporacle.png}{Copia del paquete (2,2 GB) a \texttt{delfos.inf}}{fig:scp}
 
 % ---------------------------------------------------------------------
-\section{Conversión del RPM a paquete Debian}
+\subsection{Conversión del RPM a paquete Debian}
 \label{sec:alien}
 
 Ubuntu usa paquetes \cmd{.deb}, así que el RPM se convierte con \cmd{alien}
@@ -171,7 +177,7 @@ que aparecen durante la conversión no son el problema: \cmd{alien} los ignora
 \captura{debcreado.png}{Paquete \texttt{oracle-database-xe-21c\_1.0-2\_amd64.deb} generado correctamente (2,2 GB)}{fig:deb}
 
 % ---------------------------------------------------------------------
-\section{Instalación del paquete}
+\subsection{Instalación del paquete}
 \label{sec:dpkg}
 
 Antes de instalar se crea el enlace que Oracle espera para \cmd{libaio}
@@ -253,7 +259,7 @@ sudo rm -f ~/oracle-database-xe-21c_1.0-2_amd64.deb
 \captura[0.7\linewidth]{limpiezapostsnpcht.png}{Limpieza de paquetes: 51 GB libres}{fig:limpieza}
 
 % ---------------------------------------------------------------------
-\section{Entorno del usuario \texttt{oracle} y listener}
+\subsection{Entorno del usuario \texttt{oracle} y listener}
 \label{sec:entorno}
 
 Las variables de entorno definidas en la semana 1 en
@@ -293,10 +299,10 @@ lsnrctl status
 \captura{listener.png}{Listener arrancado. Aún «no soporta ningún servicio» porque no existe ninguna base de datos}{fig:listener}
 
 % ---------------------------------------------------------------------
-\section{Creación de BAHIA.inf con DBCA}
+\subsection{Creación de BAHIA.inf con DBCA}
 \label{sec:dbca}
 
-\subsection{Intento con la interfaz gráfica}
+\subsubsection{Intento con la interfaz gráfica}
 
 La máquina es un Ubuntu Server sin entorno gráfico, así que la idea era lanzar
 DBCA reenviando su ventana al escritorio del anfitrión por SSH (X11
@@ -348,7 +354,7 @@ repositorio (\cmd{scripts/03-dbca-bahia.sh}).
 \captura[0.75\linewidth]{cabezazox11_2.png}{La \emph{cookie} de \texttt{sercal} y el bloque pegado que se pierde tras \texttt{sudo su}}{fig:x11b}
 \captura{rendicionx11.png}{Con la \emph{cookie} copiada, DBCA sigue fallando: se pasa al modo silencioso}{fig:x11c}
 
-\subsection{Generación de los scripts de creación}
+\subsubsection{Generación de los scripts de creación}
 
 El enunciado pide activar la opción de DBCA que genera los ficheros de comandos
 de creación. En modo silencioso es la operación \cmd{-generateScripts}. Primero
@@ -441,7 +447,7 @@ grep -i -n "password\|identified by" *.sql *.sh
 \label{tab:scripts}
 \end{table}
 
-\subsection{Creación de la base de datos}
+\subsubsection{Creación de la base de datos}
 
 La creación se lanza dentro de \cmd{tmux} para que no se interrumpa si se corta
 la conexión SSH. DBCA pide por teclado las contraseñas de \cmd{SYS},
@@ -504,7 +510,7 @@ Esta vez cada fase tarda minutos, y la creación termina con
 \cmd{Nombre de la Base de Datos Global: BAHIA.inf} e
 \cmd{Identificador del Sistema (SID): XE}.
 
-\subsection{Verificación}
+\subsubsection{Verificación}
 
 \begin{lstlisting}[style=sql]
 -- sqlplus / as sysdba
@@ -552,7 +558,7 @@ ALTER PLUGGABLE DATABASE BAHIAPDB SAVE STATE;
 \captura[0.75\linewidth]{showpdbs.png}{\texttt{BAHIAPDB} abierta en \texttt{READ WRITE} y con el estado guardado}{fig:pdb}
 
 % ---------------------------------------------------------------------
-\section{Esquemas de ejemplo}
+\subsection{Esquemas de ejemplo}
 \label{sec:hr}
 
 Como DBCA 21c ya no los incluye (cabezazo~\ref{cab:dbt12513}), se descargan los
@@ -629,7 +635,7 @@ Por último, se comprueba el acceso con el propio usuario \cmd{HR}:
 \captura[0.8\linewidth]{schemacheck.png}{Consulta a \texttt{employees} conectado como \texttt{HR}}{fig:hrchk}
 
 % ---------------------------------------------------------------------
-\section{Arranque automático}
+\subsection{Arranque automático}
 \label{sec:arranque}
 
 El paquete RPM de Oracle no crea en Ubuntu un servicio de arranque, así que se
@@ -709,38 +715,34 @@ Con todo verificado se toma la instantánea final de la fase:
 
 \captura{snapshot4.png}{Instantánea \texttt{s2-bahia-completa}}{fig:snap4}
 
-% ---------------------------------------------------------------------
-\section{Resumen de la fase}
+% --------------------------------------------------
+\subsection{Verificación}
 
-\begin{table}[H]
-\centering\small
-\begin{tabular}{@{}p{0.55\linewidth}l@{}}
-\toprule
-\textbf{Requisito} & \textbf{Evidencia} \\
-\midrule
-Oracle XE 21c instalado según OFA & Fig.~\ref{fig:dpkgok}, \ref{fig:entorno} \\
-Base de datos \cmd{BAHIA.inf}, SID \cmd{XE} & Fig.~\ref{fig:dbcaok}, \ref{fig:verif} \\
-Juego de caracteres \cmd{AL32UTF8} & Fig.~\ref{fig:verif}, \ref{fig:scriptsgrep} \\
-Bloque de 8 KB & Fig.~\ref{fig:verif}, \ref{fig:scriptsgrep} \\
-Esquemas de ejemplo instalados & Fig.~\ref{fig:hr3}, tabla~\ref{tab:hr} \\
-Scripts de creación generados & Fig.~\ref{fig:genchk}, tabla~\ref{tab:scripts} \\
-Arranque automático & Fig.~\ref{fig:service}, \ref{fig:reboot2} \\
-\bottomrule
-\end{tabular}
-\caption{Cumplimiento del enunciado en esta fase}
+Para dar por concluido el apartado se han realizado las comprobaciones de la Tabla~\ref{tab:verif2}, todas ellas con resultado satisfactorio.
+
+\begin{table}[!htbp]
+    \centering
+    \small
+    \begin{tabularx}{\textwidth}{L{3.4cm} L{5.2cm} Y}
+        \toprule
+        \textbf{Comprobación} & \textbf{Comando} & \textbf{Resultado esperado} \\
+        \midrule
+        Integridad del RPM & \texttt{sha256sum} & Coincide con el hash de Oracle (Fig.~\ref{fig:sha256}) \\
+        Software instalado & \texttt{sqlplus -v} (como \texttt{oracle}) & \texttt{Release 21.0.0.0.0} (Fig.~\ref{fig:entorno}) \\
+        Nombre global & \texttt{SELECT * FROM global\_name;} & \texttt{BAHIA.INF} (Fig.~\ref{fig:verif}) \\
+        Juego de caracteres & \texttt{nls\_database\_parameters} & \texttt{AL32UTF8} \\
+        Tamaño de bloque & \texttt{SHOW PARAMETER db\_block\_size} & \texttt{8192} \\
+        Instancia & \texttt{SELECT ... FROM v\$instance;} & \texttt{XE} en \texttt{OPEN} \\
+        PDB & \texttt{SHOW PDBS} & \texttt{BAHIAPDB} en \texttt{READ WRITE} \\
+        Scripts de creación & \texttt{ls /opt/oracle/admin/BAHIA/scripts} & 17 scripts (Tabla~\ref{tab:scripts}) \\
+        Esquema HR & \texttt{hr\_install.sql} & Filas esperadas = cargadas (Tabla~\ref{tab:hr}) \\
+        \textit{Listener} & \texttt{lsnrctl status} & Servicios \texttt{BAHIA.inf} y \texttt{bahiapdb.inf} \\
+        Arranque automático & \texttt{systemctl status oracle-xe} & \texttt{enabled}, instancia abierta tras reiniciar (Fig.~\ref{fig:reboot2}) \\
+        Snapshots & \texttt{virsh snapshot-list delfos} & \texttt{s2-xe-instalado}, \texttt{s2-bahia-creada}, \texttt{s2-bahia-completa} \\
+        \bottomrule
+    \end{tabularx}
+    \caption{Comprobaciones del Apartado 2}
+    \label{tab:verif2}
 \end{table}
 
-\begin{table}[H]
-\centering\small
-\begin{tabular}{@{}ll@{}}
-\toprule
-\textbf{Instantánea} & \textbf{Estado} \\
-\midrule
-\cmd{s1-preparada-pre-oracle} & Ubuntu + preparación OFA, sin Oracle \\
-\cmd{s2-xe-instalado} & Oracle XE 21c instalado, sin base de datos \\
-\cmd{s2-bahia-creada} & BAHIA.inf creada, sin esquemas de ejemplo \\
-\cmd{s2-bahia-completa} & BAHIA.inf + HR + arranque automático \\
-\bottomrule
-\end{tabular}
-\caption{Instantáneas de la máquina virtual}
-\end{table}
+Los comandos ejecutados se han recogido en los scripts \path{scripts/02-instalar-xe.sh} y \path{scripts/03-dbca-bahia.sh}; el \textit{listener} y el servicio de arranque, en la carpeta \texttt{config/}, y los scripts generados por DBCA, en \texttt{db-creation-scripts/} del repositorio.
