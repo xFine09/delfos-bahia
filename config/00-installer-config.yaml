@@ -1,0 +1,17 @@
+# /etc/netplan/00-installer-config.yaml (delfos.inf) — IP fija
+# Ajustar la MAC (ip link), la IP y la puerta de enlace a vuestra red.
+network:
+  version: 2
+  ethernets:
+    enp1s0:
+      match:
+        macaddress: 52:54:00:cc:6e:e6
+      set-name: enp1s0
+      dhcp4: false
+      dhcp6: false
+      addresses: [192.168.3.133/24]
+      routes:
+        - to: default
+          via: 192.168.3.1
+      nameservers:
+        addresses: [1.1.1.1, 8.8.8.8]

@@ -1,0 +1,2 @@
+# Línea a añadir en /etc/hosts de la VM y de cada anfitrión
+192.168.3.133   delfos.inf delfos
