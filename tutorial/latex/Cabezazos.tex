@@ -151,6 +151,22 @@ Reintroducir las credenciales. \\
 «I'm sorry oracle. I'm afraid I can't do that» al usar \cmd{sudo}. &
 El usuario \cmd{oracle} no tiene (ni debe tener) privilegios de \cmd{sudo}. &
 Ejecutar las tareas de sistema con \cmd{sercal} (\cmd{su - sercal}). \\
+\rowcolor{gray!12}\multicolumn{6}{@{}l}{\textbf{Apartado 3: acceso remoto y cliente Oracle}} \\
+
+\ref{cab:ufw} & 20/10/2026 & Cortafuegos &
+\cmd{ufw status} muestra \cmd{inactive} tras añadir la regla del 1521. &
+El cortafuegos no quedó activado en el Apartado 1. &
+\cmd{ufw allow OpenSSH}, \cmd{ufw allow 1521/tcp} y \cmd{ufw enable}. \\
+
+\ref{cab:orapw} & 20/10/2026 & Acceso remoto &
+\cmd{orapwXE} no existe en \cmd{$ORACLE_HOME/dbs}. &
+Oracle 21c usa un ORACLE\_HOME de solo lectura: los ficheros de instancia van en \cmd{$ORACLE_BASE/dbs}. &
+\cmd{orabaseconfig}; el fichero está en \cmd{/opt/oracle/dbs/orapwXE}. \\
+
+\ref{cab:libaiodeb} & 28/10/2026 & Cliente &
+\cmd{sqlplus -v} en Debian: no encuentra \cmd{libaio.so.1}. &
+Debian 13 la distribuye como \cmd{libaio.so.1t64}. &
+\cmd{ln -s libaio.so.1t64 libaio.so.1} y \cmd{ldconfig}. \\
 \end{xltabular}
 }
 

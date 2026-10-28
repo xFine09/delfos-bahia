@@ -23,3 +23,6 @@ La versión detallada, con capturas, está en el tutorial (`tutorial/latex/`).
 | 16 | 13/10/2026 | Esquemas | `hr_install.sql`: `ORA-65096` nombre de usuario o rol común no válido. | Se ejecutó en `CDB$ROOT` (solo admite usuarios `C##`). | Conectar a `//delfos.inf:1521/bahiapdb.inf` y comprobar `SHOW CON_NAME`. |
 | 17 | 13/10/2026 | Esquemas | `ORA-01017` al conectar como SYSTEM. | Contraseña mal tecleada. | Reintroducir credenciales. |
 | 18 | 13/10/2026 | Arranque | «I'm sorry oracle. I'm afraid I can't do that» con `sudo`. | `oracle` no tiene (ni debe tener) sudo. | Tareas de sistema con `sercal` (`su - sercal`). |
+| 19 | 20/10/2026 | Cortafuegos | `ufw status` muestra `inactive` tras añadir la regla del 1521. | El cortafuegos no quedó activado en la semana 1. | `ufw allow OpenSSH`, `ufw allow 1521/tcp` y `ufw enable`. |
+| 20 | 20/10/2026 | Acceso remoto | `orapwXE` no existe en `$ORACLE_HOME/dbs`. | Oracle 21c usa un ORACLE_HOME de solo lectura: los ficheros de instancia van en `$ORACLE_BASE/dbs`. | `orabaseconfig` → `/opt/oracle/dbs/orapwXE`. |
+| 21 | 28/10/2026 | Cliente | `sqlplus -v` en Debian: no encuentra `libaio.so.1`. | Debian 13 la distribuye como `libaio.so.1t64`. | `ln -s libaio.so.1t64 libaio.so.1` y `ldconfig`. |

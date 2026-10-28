@@ -1,0 +1,250 @@
+% =====================================================================
+% Semana3.tex — Apartado 3: acceso remoto y cliente Oracle
+% Se incluye desde main.tex con \input; no compilar por separado.
+% =====================================================================
+
+% ==================== APARTADO 3 ====================
+\newpage
+\section{Acceso remoto y cliente Oracle}
+\label{sec:apartado3}
+
+% --------------------------------------------------
+\subsection{Objetivos}
+
+El enunciado exige que, durante la demostración, se pueda trabajar con la base de datos desde otra máquina mediante un cliente de Oracle y conectarse en remoto como administrador. Al finalizar este apartado, el entorno debe cumplir las siguientes condiciones:
+
+\begin{itemize}
+    \item El cortafuegos de \texttt{delfos.inf} está activo y solo admite SSH y el \textit{listener} de Oracle.
+    \item La instancia admite conexiones remotas con privilegio \texttt{SYSDBA} mediante fichero de contraseñas.
+    \item Hay un cliente de Oracle (Instant Client con SQL*Plus) instalado en equipos distintos del servidor.
+    \item Desde esos equipos es posible conectarse a la CDB como \texttt{SYS} y a la PDB \texttt{BAHIAPDB} como \texttt{HR}, tanto con la cadena de conexión completa como con alias de \texttt{tnsnames.ora}.
+    \item Se ha comprobado que el \textit{gateway} DG4ODBC está disponible, requisito del Apartado~4.
+\end{itemize}
+
+La Tabla~\ref{tab:equipos3} resume los equipos que intervienen.
+
+\begin{table}[!htbp]
+    \centering
+    \begin{tabularx}{\textwidth}{L{3.6cm} L{3.2cm} Y}
+        \toprule
+        \textbf{Equipo} & \textbf{Dirección} & \textbf{Papel} \\
+        \midrule
+        \texttt{delfos.inf} & 192.168.3.133 & Servidor Oracle XE 21c (BAHIA.inf) \\
+        Cliente CachyOS & 192.168.3.197 & Instant Client 23.26 con SQL*Plus \\
+        Cliente Debian & red local & Instant Client 23.26 con SQL*Plus; prueba desde otra máquina \\
+        \bottomrule
+    \end{tabularx}
+    \caption{Equipos del Apartado 3}
+    \label{tab:equipos3}
+\end{table}
+
+% --------------------------------------------------
+\subsection{Cortafuegos}
+
+El puerto 1521 del \textit{listener} se abre con \texttt{ufw}. Al añadir la regla se comprobó que el cortafuegos estaba inactivo, por lo que se activó en ese momento, permitiendo antes SSH para no perder la sesión remota:
+
+\begin{lstlisting}[language=bash]
+sudo ufw allow OpenSSH
+sudo ufw allow 1521/tcp
+sudo ufw enable
+sudo ufw status verbose
+\end{lstlisting}
+
+\begin{cabezazo}{\texttt{ufw} estaba inactivo}{cab:ufw}
+\problema Tras \cmd{sudo ufw allow 1521/tcp}, \cmd{ufw status} mostraba
+\cmd{Status: inactive}: la regla se guardaba, pero no se aplicaba.
+
+\causa El cortafuegos no había quedado activado durante la preparación del
+Apartado~1, aunque el procedimiento incluía \cmd{ufw enable}.
+
+\solucion Permitir SSH y el puerto 1521 y activar \cmd{ufw}. Antes de cerrar
+la sesión se comprobó desde otra terminal que SSH seguía accesible.
+\end{cabezazo}
+
+\captura[0.75\textwidth]{s3_paso1_ufw.png}{Cortafuegos activo: entrada denegada por defecto salvo SSH (22) y \textit{listener} (1521), en IPv4 e IPv6}{fig:ufw}
+
+El \textit{listener} ya escuchaba en todas las interfaces (\texttt{ss -tlnp} muestra \texttt{*:1521}), por lo que no fue necesario modificar \texttt{listener.ora}.
+
+% --------------------------------------------------
+\subsection{Fichero de contraseñas y conexión SYSDBA remota}
+
+Una conexión local como \texttt{/ as sysdba} se autentica con el sistema operativo (pertenencia al grupo \texttt{dba}). En remoto eso no es posible, de modo que Oracle necesita un fichero de contraseñas con los usuarios que tienen privilegios administrativos y el parámetro \texttt{remote\_login\_passwordfile} con valor \texttt{EXCLUSIVE}. DBCA dejó ambos configurados al crear la base de datos.
+
+\begin{cabezazo}{\texttt{orapwXE} no está en \texttt{\$ORACLE\_HOME/dbs}}{cab:orapw}
+\problema \cmd{ls $ORACLE_HOME/dbs/orapwXE} indica que el fichero no existe.
+(Un primer intento como \cmd{sercal} falló además porque ese usuario no tiene
+definida \texttt{ORACLE\_HOME}.)
+
+\causa Oracle 21c instala por defecto un \textit{ORACLE\_HOME} de solo lectura:
+los ficheros propios de cada instancia, como el fichero de contraseñas y el
+\texttt{spfile}, se guardan en \cmd{$ORACLE_BASE/dbs}.
+
+\solucion Localizar el directorio con \cmd{orabaseconfig}, que devuelve
+\cmd{/opt/oracle}. Allí se encuentran \cmd{orapwXE} y \cmd{spfileXE.ora}.
+\end{cabezazo}
+
+\begin{lstlisting}[language=bash]
+orabaseconfig          # /opt/oracle
+ls -l /opt/oracle/dbs/ # orapwXE, spfileXE.ora, ...
+\end{lstlisting}
+
+\begin{lstlisting}[style=sql]
+SHOW PARAMETER remote_login_passwordfile
+SELECT username, sysdba FROM v$pwfile_users;
+\end{lstlisting}
+
+\captura[0.7\textwidth]{s3_paso2.png}{\texttt{remote\_login\_passwordfile} en \texttt{EXCLUSIVE} y \texttt{SYS} con privilegio \texttt{SYSDBA} en el fichero de contraseñas}{fig:pwfile}
+
+% --------------------------------------------------
+\subsection{Instalación del cliente Oracle}
+
+Como cliente se utiliza \textbf{Oracle Instant Client}, que permite conectarse a una base de datos remota sin instalar el software completo. Se descargan de la web de Oracle los paquetes \textit{Basic} y \textit{SQL*Plus} para Linux x86-64; los enlaces sin versión apuntan siempre a la última, en este caso la 23.26, compatible con un servidor 21c:
+
+\begin{lstlisting}[language=bash]
+mkdir -p ~/oracle && cd ~/oracle
+wget https://download.oracle.com/otn_software/linux/instantclient/instantclient-basic-linuxx64.zip
+wget https://download.oracle.com/otn_software/linux/instantclient/instantclient-sqlplus-linuxx64.zip
+unzip -o instantclient-basic-linuxx64.zip
+unzip -o instantclient-sqlplus-linuxx64.zip
+\end{lstlisting}
+
+\subsubsection{Cliente CachyOS}
+
+El intérprete de órdenes de CachyOS es \texttt{fish}, por lo que las variables de entorno se definen como variables universales:
+
+\begin{lstlisting}[language=bash]
+set -Ux ORACLE_IC ~/oracle/instantclient_23_26
+set -Ux LD_LIBRARY_PATH $ORACLE_IC
+fish_add_path $ORACLE_IC
+exec fish
+sqlplus -v
+\end{lstlisting}
+
+\captura{s3_paso3_1.png}{Variables de entorno del Instant Client en \texttt{fish}}{fig:icfish}
+\captura{s3_paso3_2.png}{SQL*Plus 23.26 operativo en el cliente CachyOS (192.168.3.197)}{fig:icversion}
+
+\subsubsection{Cliente Debian}
+
+En Debian el procedimiento es el mismo, con las variables definidas en \texttt{\textasciitilde/.bashrc}. Aquí apareció el mismo problema con \texttt{libaio} que en el servidor.
+
+\begin{cabezazo}{\texttt{sqlplus}: \texttt{libaio.so.1} no encontrada en Debian}{cab:libaiodeb}
+\problema En el cliente Debian, \cmd{sqlplus -v} falla con
+«error while loading shared libraries: libaio.so.1: cannot open shared object
+file», aunque \cmd{libaio1t64} está instalado.
+
+\causa Igual que en Ubuntu 26.04, Debian 13 distribuye la biblioteca como
+\cmd{libaio.so.1t64}, mientras que el Instant Client busca \cmd{libaio.so.1}.
+
+\solucion Crear el enlace simbólico y actualizar la caché de bibliotecas:
+\begin{lstlisting}[language=bash]
+sudo ln -s /usr/lib/x86_64-linux-gnu/libaio.so.1t64 /usr/lib/x86_64-linux-gnu/libaio.so.1
+sudo ldconfig
+\end{lstlisting}
+\end{cabezazo}
+
+\captura[0.8\textwidth]{s3_cabezazopaso6.png}{Error de \texttt{libaio.so.1} en Debian y su solución con un enlace simbólico}{fig:libaiodeb}
+
+% --------------------------------------------------
+\subsection{Conexión remota}
+
+Desde el cliente CachyOS se prueban las dos conexiones que se mostrarán en la demostración: como administrador a la CDB, mediante el servicio \texttt{BAHIA.inf}, y como usuario de aplicación a la PDB, mediante \texttt{bahiapdb.inf}. Se utiliza la sintaxis de conexión simplificada (\textit{Easy Connect}) \texttt{//host:puerto/servicio}:
+
+\begin{lstlisting}[language=bash]
+sqlplus sys@//delfos.inf:1521/BAHIA.inf as sysdba
+sqlplus hr@//delfos.inf:1521/bahiapdb.inf
+\end{lstlisting}
+
+\begin{lstlisting}[style=sql]
+SELECT instance_name, host_name FROM v$instance;
+SHOW CON_NAME
+\end{lstlisting}
+
+\captura[0.7\textwidth]{s3_paso4_1.png}{Conexión remota como \texttt{SYS} con \texttt{SYSDBA}: instancia \texttt{XE} en \texttt{delfos.inf}, contenedor \texttt{CDB\$ROOT}}{fig:remsys}
+\captura[0.7\textwidth]{s3_paso4_2.png}{Conexión remota como \texttt{HR} a la PDB}{fig:remhr}
+
+% --------------------------------------------------
+\subsection{Alias de conexión con \texttt{tnsnames.ora}}
+
+Para no escribir la cadena completa en cada conexión, se definen dos alias en el fichero \path{~/oracle/network/admin/tnsnames.ora} del cliente:
+
+\begin{lstlisting}
+BAHIA =
+  (DESCRIPTION =
+    (ADDRESS = (PROTOCOL = TCP)(HOST = delfos.inf)(PORT = 1521))
+    (CONNECT_DATA = (SERVER = DEDICATED)(SERVICE_NAME = BAHIA.inf)))
+
+BAHIAPDB =
+  (DESCRIPTION =
+    (ADDRESS = (PROTOCOL = TCP)(HOST = delfos.inf)(PORT = 1521))
+    (CONNECT_DATA = (SERVER = DEDICATED)(SERVICE_NAME = bahiapdb.inf)))
+\end{lstlisting}
+
+La variable \texttt{TNS\_ADMIN} indica al cliente dónde está el fichero:
+
+\begin{lstlisting}[language=bash]
+set -Ux TNS_ADMIN ~/oracle/network/admin
+sqlplus sys@BAHIA as sysdba
+sqlplus hr@BAHIAPDB
+\end{lstlisting}
+
+\captura[0.7\textwidth]{s3_paso5.png}{Conexiones mediante los alias \texttt{BAHIA} y \texttt{BAHIAPDB}}{fig:tns}
+
+% --------------------------------------------------
+\subsection{Prueba desde otra máquina}
+
+Por último, se repiten las conexiones desde el equipo Debian, tras añadir \texttt{delfos.inf} a su fichero \texttt{/etc/hosts}. Ambas funcionan, y \texttt{SHOW CON\_NAME} confirma que \texttt{HR} trabaja en \texttt{BAHIAPDB}:
+
+\captura[0.7\textwidth]{s3_paso6_1.png}{Conexión \texttt{SYSDBA} remota desde el cliente Debian}{fig:debsys}
+\captura[0.7\textwidth]{s3_paso6_2.png}{Conexión como \texttt{HR} a \texttt{BAHIAPDB} desde el cliente Debian}{fig:debhr}
+
+% --------------------------------------------------
+\subsection{Comprobación de DG4ODBC}
+
+La ampliación del proyecto (Apartado~4) utiliza los servicios heterogéneos de Oracle mediante \textit{Database Gateway for ODBC} (DG4ODBC). Antes de planificarla se comprueba que el ejecutable y su configuración de ejemplo existen en el \texttt{ORACLE\_HOME} de la XE:
+
+\begin{lstlisting}[language=bash]
+ls -l $ORACLE_HOME/bin/dg4odbc
+ls $ORACLE_HOME/hs/admin/
+\end{lstlisting}
+
+\captura{s3_paso7.png}{\texttt{dg4odbc} y la plantilla \texttt{initdg4odbc.ora} están incluidos en Oracle XE 21c}{fig:dg4odbc}
+
+Al estar incluido, no es necesario instalar por separado Oracle Database Gateways.
+
+% --------------------------------------------------
+\subsection{Snapshot}
+
+Con el acceso remoto verificado se crea la instantánea \texttt{s3-acceso-remoto}.
+
+% REVISAR: la captura muestra VBoxManage (VirtualBox, VM "delfosbahia") en lugar de
+% virsh (Qemu/KVM). Explicad aquí en qué equipo/hipervisor se hizo o cambiad la captura.
+\captura{s3_snapshot.png}{Instantánea \texttt{s3-acceso-remoto}}{fig:snap3}
+
+% --------------------------------------------------
+\subsection{Verificación}
+
+Para dar por concluido el apartado se han realizado las comprobaciones de la Tabla~\ref{tab:verif3}, todas ellas con resultado satisfactorio.
+
+\begin{table}[!htbp]
+    \centering
+    \small
+    \begin{tabularx}{\textwidth}{L{3.4cm} L{5.2cm} Y}
+        \toprule
+        \textbf{Comprobación} & \textbf{Comando} & \textbf{Resultado esperado} \\
+        \midrule
+        Cortafuegos & \texttt{sudo ufw status verbose} & Activo; 22 y 1521 permitidos (Fig.~\ref{fig:ufw}) \\
+        \textit{Listener} & \texttt{ss -tlnp | grep 1521} & Escucha en \texttt{*:1521} \\
+        Fichero de contraseñas & \texttt{SELECT ... FROM v\$pwfile\_users;} & \texttt{SYS} con \texttt{SYSDBA = TRUE} (Fig.~\ref{fig:pwfile}) \\
+        Cliente Oracle & \texttt{sqlplus -v} & SQL*Plus 23.26 (Fig.~\ref{fig:icversion}) \\
+        SYSDBA remoto & \path{sqlplus sys@//delfos.inf:1521/BAHIA.inf as sysdba} & Instancia \texttt{XE} en \texttt{delfos.inf} (Fig.~\ref{fig:remsys}) \\
+        Usuario remoto & \path{sqlplus hr@//delfos.inf:1521/bahiapdb.inf} & Conectado a \texttt{BAHIAPDB} (Fig.~\ref{fig:debhr}) \\
+        Alias TNS & \texttt{sqlplus sys@BAHIA as sysdba} & Conexión correcta (Fig.~\ref{fig:tns}) \\
+        Otra máquina & Conexiones desde Debian & Correctas (Figs.~\ref{fig:debsys} y~\ref{fig:debhr}) \\
+        DG4ODBC & \texttt{ls \$ORACLE\_HOME/bin/dg4odbc} & El ejecutable existe (Fig.~\ref{fig:dg4odbc}) \\
+        \bottomrule
+    \end{tabularx}
+    \caption{Comprobaciones del Apartado 3}
+    \label{tab:verif3}
+\end{table}
+
+Los comandos del servidor se han recogido en el script \path{scripts/06-acceso-remoto.sh}, y el \texttt{tnsnames.ora} del cliente, en \path{scripts/tnsnames-cliente.ora}.
