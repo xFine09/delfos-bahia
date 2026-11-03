@@ -1,0 +1,11 @@
+# $ORACLE_HOME/hs/admin/initPGSQL.ora — Gateway DG4ODBC hacia PostgreSQL
+# El nombre debe ser init<SID>.ora, con el SID del SID_DESC del listener (PGSQL).
+HS_FDS_CONNECT_INFO = PG_RRHH
+HS_FDS_SHAREABLE_NAME = /usr/lib/x86_64-linux-gnu/libodbc.so
+HS_LANGUAGE = AMERICAN_AMERICA.AL32UTF8
+HS_NLS_NCHAR = UCS2
+HS_FDS_SUPPORT_STATISTICS = FALSE
+HS_TRANSACTION_MODEL = SINGLE_SITE
+# Trazas para depurar (poner a OFF cuando funcione)
+HS_FDS_TRACE_LEVEL = OFF
+set ODBCINI = /etc/odbc.ini

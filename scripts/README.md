@@ -18,6 +18,9 @@ cabezazos ya aplicadas (el número de cabezazo se cita en los comentarios).
 | `06-acceso-remoto.sh` | VM, `sercal` | ufw (22 y 1521), comprobación del fichero de contraseñas y de `dg4odbc` |
 | `06b-cliente-instantclient.sh` | Cliente Debian | Instant Client + SQL*Plus, `libaio`, `tnsnames.ora` y `/etc/hosts` |
 | `tnsnames-cliente.ora` | Cliente | Alias `BAHIA` y `BAHIAPDB` |
+| `07-postgres-odbc.sh` | VM, `sercal` | PostgreSQL, usuario `migra`, base `rrhh`, tablas de HR y DSN `PG_RRHH` |
+| `08-dg4odbc.sh` | VM, `oracle` | `initPGSQL.ora`, SID estático `PGSQL` en el listener, `tnsnames.ora` del servidor |
+| `odbc.ini.example`, `initPGSQL.ora`, `listener-dg4odbc.ora`, `tnsnames-servidor.ora` | VM | Configuración del gateway |
 | `vm-snapshot.sh` | Anfitrión | Apaga, crea instantánea y arranca |
 
 Orden completo:

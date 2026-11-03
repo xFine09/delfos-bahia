@@ -1,0 +1,10 @@
+# /etc/odbc.ini — DSN de PostgreSQL para DG4ODBC (copiar y poner la contraseña real)
+[PG_RRHH]
+Driver      = PostgreSQL Unicode
+Description = Base rrhh (esquema hr) para el DB link de BAHIA
+Servername  = localhost
+Port        = 5432
+Database    = rrhh
+Username    = migra
+Password    = CambiaEstaClave1
+ReadOnly    = No
