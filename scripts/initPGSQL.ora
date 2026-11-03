@@ -2,10 +2,10 @@
 # El nombre debe ser init<SID>.ora, con el SID del SID_DESC del listener (PGSQL).
 HS_FDS_CONNECT_INFO = PG_RRHH
 HS_FDS_SHAREABLE_NAME = /usr/lib/x86_64-linux-gnu/libodbc.so
-HS_LANGUAGE = AMERICAN_AMERICA.AL32UTF8
-HS_NLS_NCHAR = UCS2
+# No usar HS_LANGUAGE=...AL32UTF8 + HS_NLS_NCHAR=UCS2: el gateway pasa a las
+# funciones Unicode de ODBC y unixODBC no encuentra el DSN (IM002).
+HS_LANGUAGE = AMERICAN_AMERICA.WE8ISO8859P15
 HS_FDS_SUPPORT_STATISTICS = FALSE
 HS_TRANSACTION_MODEL = SINGLE_SITE
 # Trazas para depurar (poner a OFF cuando funcione)
 HS_FDS_TRACE_LEVEL = OFF
-set ODBCINI = /etc/odbc.ini
