@@ -30,8 +30,8 @@ generados por DBCA. Como ampliación, se exporta un esquema a **PostgreSQL** med
 | 1 | VM, Ubuntu Server, IP fija y arquitectura OFA | ✅ |
 | 2 | Oracle XE 21c, BAHIA.inf con DBCA, esquema HR, arranque automático | ✅ |
 | 3 | Acceso remoto (listener, cortafuegos, conexión como administrador) | ✅ |
-| 4 | PostgreSQL y DB link Oracle → PostgreSQL (DG4ODBC) | ⏳ |
-| 5 | Tutorial final, vídeo y demostración | ⏳ |
+| 4 | PostgreSQL y DB link Oracle → PostgreSQL (DG4ODBC) | ✅ |
+| 5 | Tutorial final | ✅ |
 
 ## Estructura del repositorio
 

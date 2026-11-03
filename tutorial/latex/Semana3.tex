@@ -216,9 +216,9 @@ Al estar incluido, no es necesario instalar por separado Oracle Database Gateway
 
 Con el acceso remoto verificado se crea la instantánea \texttt{s3-acceso-remoto}.
 
-% REVISAR: la captura muestra VBoxManage (VirtualBox, VM "delfosbahia") en lugar de
-% virsh (Qemu/KVM). Explicad aquí en qué equipo/hipervisor se hizo o cambiad la captura.
-\captura{s3_snapshot.png}{Instantánea \texttt{s3-acceso-remoto}}{fig:snap3}
+Este apartado se realizó sobre una copia de la máquina virtual ejecutada en VirtualBox, por lo que la instantánea se creó con \texttt{VBoxManage}. Al comienzo del Apartado~4 el disco de esa copia se trasladó a la máquina \texttt{delfos} de Qemu/KVM (sección~\ref{sec:migracionvm}), y a partir de ahí las instantáneas vuelven a crearse con \texttt{virsh}.
+
+\captura{s3_snapshot.png}{Instantánea \texttt{s3-acceso-remoto} en la copia de VirtualBox}{fig:snap3}
 
 % --------------------------------------------------
 \subsection{Verificación}

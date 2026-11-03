@@ -1,0 +1,361 @@
+% =====================================================================
+% Semana4.tex — Apartado 4: exportación a PostgreSQL con servicios heterogéneos
+% Se incluye desde main.tex con \input; no compilar por separado.
+% =====================================================================
+
+% ==================== APARTADO 4 ====================
+\newpage
+\section{Exportación a PostgreSQL mediante servicios heterogéneos}
+\label{sec:apartado4}
+
+% --------------------------------------------------
+\subsection{Objetivos}
+
+Como ampliación del proyecto, se despliega un servidor PostgreSQL en \texttt{delfos.inf} y se puebla uno de sus esquemas con los datos de Oracle mediante un \textit{database link} basado en los servicios heterogéneos de Oracle. Al finalizar este apartado, el entorno debe cumplir las siguientes condiciones:
+
+\begin{itemize}
+    \item La máquina virtual vuelve a ejecutarse en Qemu/KVM con el disco actualizado en el Apartado~3.
+    \item PostgreSQL está instalado, con la base de datos \texttt{rrhh} y el esquema \texttt{hr} creados.
+    \item Existe un origen de datos ODBC (DSN) que conecta con esa base de datos.
+    \item El \textit{gateway} DG4ODBC está registrado en el \textit{listener} con el SID \texttt{PGSQL}.
+    \item El usuario \texttt{HR} de \texttt{BAHIAPDB} dispone de un \textit{database link} hacia PostgreSQL.
+    \item Las siete tablas del esquema HR están copiadas en PostgreSQL, con el mismo número de filas y con sus claves ajenas.
+\end{itemize}
+
+La Tabla~\ref{tab:capas4} resume las capas que atraviesa cada consulta del enlace.
+
+\begin{table}[!htbp]
+    \centering
+    \begin{tabularx}{\textwidth}{L{3.8cm} Y}
+        \toprule
+        \textbf{Capa} & \textbf{Función} \\
+        \midrule
+        \textit{Database link} \texttt{pg\_link} & Objeto de Oracle en \texttt{BAHIAPDB} que apunta al SID \texttt{PGSQL} con \texttt{HS=OK} \\
+        \textit{Listener} (SID \texttt{PGSQL}) & Arranca el programa \texttt{dg4odbc} al recibir la conexión \\
+        DG4ODBC & Traduce SQL de Oracle a llamadas ODBC; se configura en \texttt{initPGSQL.ora} \\
+        unixODBC & Gestor de controladores ODBC; resuelve el DSN \texttt{PG\_RRHH} en \texttt{/etc/odbc.ini} \\
+        psqlODBC & Controlador ODBC de PostgreSQL (\texttt{PostgreSQL Unicode}) \\
+        PostgreSQL 18 & Base de datos \texttt{rrhh}, esquema \texttt{hr}, usuario \texttt{migra} \\
+        \bottomrule
+    \end{tabularx}
+    \caption{Capas de la conexión de Oracle a PostgreSQL}
+    \label{tab:capas4}
+\end{table}
+
+% --------------------------------------------------
+\subsection{Traslado de la máquina virtual de VirtualBox a KVM}
+\label{sec:migracionvm}
+
+El Apartado~3 se realizó sobre una copia de la máquina en VirtualBox. Para continuar en el hipervisor que exige el enunciado, se sustituyó el disco de la máquina \texttt{delfos} de Qemu/KVM por el de esa copia, conservando la definición de la máquina. El disco de KVM anterior se guardó como copia de seguridad:
+
+\begin{lstlisting}[language=bash]
+virsh -c qemu:///system shutdown delfos
+virsh -c qemu:///system domblklist delfos     # vda -> /var/lib/libvirt/images/delfos.qcow2
+sudo mv /var/lib/libvirt/images/delfos.qcow2 /var/lib/libvirt/images/delfos-kvm-backup.qcow2
+sudo qemu-img convert -p -f vdi -O qcow2 delfos.vdi /var/lib/libvirt/images/delfos.qcow2
+sudo qemu-img info /var/lib/libvirt/images/delfos.qcow2   # 70 GiB virtuales, corrupt: false
+virsh -c qemu:///system start delfos
+\end{lstlisting}
+
+El cambio de hipervisor modifica el hardware virtual que ve Ubuntu, y eso provocó dos problemas de red.
+
+\begin{cabezazo}{La IP fija no se aplica tras cambiar de hipervisor}{cab:netplanvbox}
+\problema Al arrancar en KVM, la interfaz obtiene por DHCP la dirección
+\cmd{192.168.3.212} en lugar de la IP fija \cmd{192.168.3.133}.
+
+\causa El fichero de netplan del disco de VirtualBox configuraba la interfaz
+\cmd{enp0s3}, nombre que le da VirtualBox. En KVM, con la tarjeta
+\textit{virtio}, la interfaz se llama \cmd{enp1s0}, de modo que netplan no la
+reconocía y quedaba con la configuración automática.
+
+\solucion Cambiar el nombre de la interfaz en
+\cmd{/etc/netplan/00-installer-config.yaml} y aplicar con \cmd{netplan try}:
+\begin{lstlisting}[language=bash]
+sudo sed -i 's/enp0s3:/enp1s0:/' /etc/netplan/00-installer-config.yaml
+sudo netplan try
+\end{lstlisting}
+\end{cabezazo}
+
+\begin{cabezazo}{\texttt{ORA-12543}: \texttt{delfos.inf} se resuelve a una IPv6 de enlace local}{cab:hostsvbox}
+\problema Las conexiones a \cmd{//delfos.inf:1521/bahiapdb.inf} fallan con
+\cmd{ORA-12543: TNS:host de destino no accesible}, y
+\cmd{getent hosts delfos.inf} devuelve \cmd{fe80::5054:ff:fecc:6ee6}.
+
+\causa El \cmd{/etc/hosts} del disco de VirtualBox no tenía la línea de
+\cmd{delfos.inf}. Al no encontrarla, el sistema resolvía el nombre a la
+dirección IPv6 de enlace local de la interfaz, que no sirve para conectar sin
+indicar la interfaz.
+
+\solucion Añadir la línea de la IP fija y quitar la de \cmd{127.0.1.1 delfos}
+(Figura~\ref{fig:hosts4}).
+\end{cabezazo}
+
+\captura[0.75\textwidth]{s4_hosts.png}{\texttt{/etc/hosts} corregido}{fig:hosts4}
+
+Una vez corregido el nombre, el \textit{listener} solo ofrecía el servicio estático \texttt{PGSQL}: la base de datos no se volvía a registrar.
+
+\begin{cabezazo}{La base de datos no se registra en el \textit{listener}}{cab:locallistener}
+\problema Tras reiniciar el \textit{listener}, \cmd{lsnrctl status} solo
+muestra \cmd{PGSQL}; faltan \cmd{BAHIA.inf} y \cmd{bahiapdb.inf}, aunque la
+instancia está abierta y \cmd{ALTER SYSTEM REGISTER} termina sin error.
+
+\causa El parámetro \cmd{local_listener} estaba vacío, de modo que la
+instancia localizaba el \textit{listener} resolviendo el nombre del equipo, y
+conservaba la resolución errónea anterior a la corrección de \cmd{/etc/hosts}.
+
+\solucion Indicar explícitamente la dirección del \textit{listener} y forzar
+el registro:
+\begin{lstlisting}[style=sql]
+ALTER SYSTEM SET local_listener='(ADDRESS=(PROTOCOL=TCP)(HOST=192.168.3.133)(PORT=1521))' SCOPE=BOTH;
+ALTER SYSTEM REGISTER;
+\end{lstlisting}
+\end{cabezazo}
+
+\captura[0.8\textwidth]{s4_listener_sinbd.png}{Tras reiniciar el \textit{listener}, solo aparece el servicio \texttt{PGSQL}}{fig:sinbd}
+\captura[0.8\textwidth]{s4_register.png}{La instancia está arrancada y \texttt{local\_listener} vacío}{fig:register}
+\captura[0.85\textwidth]{s4_local_listener.png}{Con \texttt{local\_listener} explícito se registran \texttt{BAHIA.inf} y \texttt{bahiapdb.inf}}{fig:locallistener}
+
+% --------------------------------------------------
+\subsection{Copia de los scripts a la máquina virtual}
+
+Los scripts del repositorio (\texttt{scripts/} y \texttt{sql/}) se copian a la máquina virtual y se dan permisos de lectura al usuario \texttt{oracle}, que ejecutará la parte de Oracle:
+
+\begin{lstlisting}[language=bash]
+scp -r scripts sql sercal@delfos.inf:~/delfos-bahia/       # desde el anfitrión
+chmod o+x ~ ~/delfos-bahia && chmod -R o+rX ~/delfos-bahia  # en la VM, como sercal
+\end{lstlisting}
+
+\captura{s4_scp.png}{Copia de los scripts y ficheros SQL a \texttt{delfos.inf}}{fig:scp4}
+\captura[0.75\textwidth]{s4_ssh.png}{Permisos para el usuario \texttt{oracle} y contenido copiado}{fig:ssh4}
+
+% --------------------------------------------------
+\subsection{PostgreSQL y esquema destino}
+
+El script \path{scripts/07-postgres-odbc.sh} instala PostgreSQL, el controlador ODBC de PostgreSQL y unixODBC, y prepara el destino:
+
+\begin{itemize}
+    \item el usuario \texttt{migra}, propietario de la base de datos \texttt{rrhh} (\path{sql/postgres/00-crear-bd.sql});
+    \item el esquema \texttt{hr}, fijado como \texttt{search\_path} de \texttt{migra};
+    \item las siete tablas de HR con nombres en minúsculas y tipos equivalentes (\path{sql/postgres/01-tablas-hr.sql}).
+\end{itemize}
+
+La Tabla~\ref{tab:tipos} recoge la correspondencia de tipos utilizada. Las claves ajenas se crean después de cargar los datos, porque \texttt{departments} y \texttt{employees} se referencian entre sí.
+
+\begin{table}[!htbp]
+    \centering
+    \begin{tabularx}{\textwidth}{L{4cm} L{4cm} Y}
+        \toprule
+        \textbf{Oracle} & \textbf{PostgreSQL} & \textbf{Ejemplo} \\
+        \midrule
+        \texttt{NUMBER(p,s)} & \texttt{numeric(p,s)} & \texttt{salary}, \texttt{commission\_pct} \\
+        \texttt{VARCHAR2(n)} & \texttt{varchar(n)} & \texttt{first\_name}, \texttt{job\_title} \\
+        \texttt{CHAR(2)} & \texttt{char(2)} & \texttt{country\_id} \\
+        \texttt{DATE} & \texttt{date} & \texttt{hire\_date}, \texttt{start\_date} \\
+        \bottomrule
+    \end{tabularx}
+    \caption{Correspondencia de tipos de datos}
+    \label{tab:tipos}
+\end{table}
+
+\captura[0.85\textwidth]{s4_script7.png}{PostgreSQL 18.6 instalado, base \texttt{rrhh} creada y tablas de HR en el esquema \texttt{hr}}{fig:script7}
+
+% --------------------------------------------------
+\subsection{Origen de datos ODBC}
+
+El DSN \texttt{PG\_RRHH} se define en \texttt{/etc/odbc.ini} con el controlador \texttt{PostgreSQL Unicode} registrado en \texttt{/etc/odbcinst.ini}:
+
+\begin{lstlisting}
+[PG_RRHH]
+Driver      = PostgreSQL Unicode
+Servername  = localhost
+Port        = 5432
+Database    = rrhh
+Username    = migra
+Password    = ********
+ReadOnly    = No
+\end{lstlisting}
+
+Antes de configurar Oracle se comprueba la conexión con \texttt{isql}, la herramienta de unixODBC: si este paso falla, el \textit{gateway} tampoco podrá conectarse.
+
+\captura[0.8\textwidth]{s4_isql.png}{\texttt{isql} conecta con el DSN; el esquema activo es \texttt{hr} y las tablas están vacías}{fig:isql}
+
+% --------------------------------------------------
+\subsection{Configuración del \textit{gateway} DG4ODBC}
+
+El script \path{scripts/08-dg4odbc.sh}, ejecutado como \texttt{oracle}, realiza tres pasos:
+
+\begin{enumerate}
+    \item Crea \texttt{initPGSQL.ora}, el fichero de configuración del \textit{gateway}, cuyo nombre debe ser \texttt{init<SID>.ora}. Se copia tanto en \path{$ORACLE_HOME/hs/admin} como en \path{$(orabasehome)/hs/admin}, ya que Oracle 21c usa un ORACLE\_HOME de solo lectura.
+    \item Añade al \texttt{listener.ora} un registro estático con el SID \texttt{PGSQL} y el programa \texttt{dg4odbc}.
+    \item Crea en el servidor un \texttt{tnsnames.ora} con el alias \texttt{PGSQL} y la cláusula \texttt{(HS = OK)}, que indica que el destino es un servicio heterogéneo.
+\end{enumerate}
+
+\begin{lstlisting}[caption={\texttt{initPGSQL.ora} (versión final)}]
+HS_FDS_CONNECT_INFO = PG_RRHH
+HS_FDS_SHAREABLE_NAME = /usr/lib/x86_64-linux-gnu/libodbc.so
+HS_LANGUAGE = AMERICAN_AMERICA.WE8ISO8859P15
+HS_FDS_SUPPORT_STATISTICS = FALSE
+HS_TRANSACTION_MODEL = SINGLE_SITE
+HS_FDS_TRACE_LEVEL = OFF
+\end{lstlisting}
+
+\begin{lstlisting}[caption={Registro estático añadido a \texttt{listener.ora}}]
+SID_LIST_LISTENER =
+  (SID_LIST =
+    (SID_DESC =
+      (SID_NAME = PGSQL)
+      (ORACLE_HOME = /opt/oracle/product/21c/dbhomeXE)
+      (PROGRAM = dg4odbc)
+      (ENVS = "LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:/opt/oracle/product/21c/dbhomeXE/lib")
+    )
+  )
+\end{lstlisting}
+
+\captura[0.8\textwidth]{s4_script8.png}{Servicio \texttt{PGSQL} registrado (estado \texttt{UNKNOWN}, propio de un registro estático) y \texttt{tnsping} correcto}{fig:script8}
+
+% --------------------------------------------------
+\subsection{\textit{Database link}}
+
+El usuario \texttt{HR} necesita el privilegio \texttt{CREATE DATABASE LINK}. Se concede desde \texttt{SYS}, cambiando al contenedor de la PDB:
+
+\begin{cabezazo}{\texttt{ORA-01017} al conectar como \texttt{SYSTEM}}{cab:systempwd}
+\problema \cmd{sqlplus system@//delfos.inf:1521/bahiapdb.inf} es rechazado
+con \cmd{ORA-01017}.
+
+\causa La contraseña de \cmd{SYSTEM} introducida no era la definida en DBCA.
+
+\solucion No es necesaria: como \cmd{oracle}, \cmd{sqlplus / as sysdba} se
+autentica por el sistema operativo, y \cmd{ALTER SESSION SET CONTAINER}
+permite trabajar en la PDB.
+\end{cabezazo}
+
+\begin{lstlisting}[style=sql]
+-- sqlplus / as sysdba
+ALTER SESSION SET CONTAINER = BAHIAPDB;
+GRANT CREATE DATABASE LINK TO hr;
+\end{lstlisting}
+
+\captura[0.7\textwidth]{s4_grant.png}{Privilegio \texttt{CREATE DATABASE LINK} concedido a \texttt{HR} en \texttt{BAHIAPDB}}{fig:grant}
+
+El enlace se crea con \path{sql/05-dblink-pg.sql}. El usuario y la contraseña de PostgreSQL van entre comillas dobles, porque Oracle convierte a mayúsculas los identificadores sin comillas y PostgreSQL distingue mayúsculas de minúsculas. En lugar del alias de \texttt{tnsnames.ora} se usa el descriptor completo, para no depender del directorio en que el servidor busca ese fichero:
+
+\begin{lstlisting}[style=sql]
+CREATE DATABASE LINK pg_link
+  CONNECT TO "migra" IDENTIFIED BY "********"
+  USING '(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=delfos.inf)(PORT=1521))
+         (CONNECT_DATA=(SID=PGSQL))(HS=OK))';
+\end{lstlisting}
+
+El enlace se creó correctamente, pero la primera consulta a través de él falló.
+
+\begin{cabezazo}{\texttt{ORA-28500} con \texttt{IM002}: el \textit{gateway} no encuentra el DSN}{cab:im002}
+\problema Al consultar \cmd{"pg_tables"@pg_link} se obtiene
+\cmd{ORA-28500} con el mensaje
+\cmd{[unixODBC][Driver Manager]Data source name not found and no default driver specified {IM002}},
+aunque \cmd{isql -v PG_RRHH} funciona tanto con \cmd{sercal} como con
+\cmd{oracle}.
+
+\causa La traza del \textit{gateway} (\cmd{HS_FDS_TRACE_LEVEL = DEBUG})
+demostró que leía bien \cmd{initPGSQL.ora}, que cargaba \cmd{libodbc.so} y
+que pasaba el DSN correcto (\cmd{HS_FDS_CONNECT_INFO = "PG_RRHH"}), pero que
+\cmd{SQLConnect} devolvía \cmd{IM002}. Se descartaron la ruta de
+\cmd{odbc.ini} (variables \cmd{ODBCINI} y \cmd{ODBCSYSINI}, incluida una
+línea \cmd{ENVS} con un espacio tras la coma) y un \cmd{~/.odbc.ini} vacío
+creado durante las pruebas. El origen era la configuración de idioma:
+con \cmd{HS_LANGUAGE = AMERICAN_AMERICA.AL32UTF8} y \cmd{HS_NLS_NCHAR = UCS2},
+DG4ODBC utiliza las funciones Unicode de ODBC y unixODBC no reconocía el
+nombre del DSN.
+
+\solucion Usar un juego de caracteres de un byte y eliminar
+\cmd{HS_NLS_NCHAR}:
+\begin{lstlisting}
+HS_LANGUAGE = AMERICAN_AMERICA.WE8ISO8859P15
+\end{lstlisting}
+Los datos de HR no contienen caracteres fuera de ese juego, así que la
+migración no se ve afectada.
+\end{cabezazo}
+
+\captura[0.8\textwidth]{s4_im002.png}{Enlace creado, pero la consulta falla con \texttt{IM002} (contraseña oculta)}{fig:im002}
+\captura[0.8\textwidth]{s4_initpgsql.png}{Primera revisión: los ficheros del \textit{gateway} existen en ambos directorios}{fig:initpgsql}
+\captura[0.8\textwidth]{s4_envs.png}{Variables de entorno del programa \texttt{dg4odbc} en el \textit{listener}}{fig:envs}
+\captura[0.75\textwidth]{s4_traza2.png}{Traza del \textit{gateway}: lee \texttt{initPGSQL.ora} (\texttt{DEBUG}, \texttt{UCS2})}{fig:traza}
+\captura[0.75\textwidth]{s4_listener_reinicio.png}{Reinicio completo del \textit{listener} durante la depuración}{fig:reinicio}
+\captura[0.8\textwidth]{s4_dblink_ok.png}{Sin el modo Unicode, el enlace devuelve las siete tablas del esquema \texttt{hr} de PostgreSQL}{fig:dblinkok}
+
+% --------------------------------------------------
+\subsection{Migración de los datos}
+
+La primera versión del script de migración usaba \texttt{INSERT ... SELECT} desde las tablas locales hacia las remotas.
+
+\begin{cabezazo}{\texttt{ORA-02025} en \texttt{INSERT ... SELECT}}{cab:ora02025}
+\problema \cmd{INSERT INTO "regions"@pg_link (...) SELECT ... FROM regions}
+falla con \cmd{ORA-02025: todas las tablas de la sentencia SQL deben estar en
+la base de datos remota}.
+
+\causa Los servicios heterogéneos no admiten sentencias DML que combinen
+tablas locales de Oracle y tablas remotas del sistema no Oracle.
+
+\solucion Recorrer cada tabla local con un cursor PL/SQL e insertar fila a
+fila con \cmd{VALUES}, todo en una única transacción.
+\end{cabezazo}
+
+El script definitivo, \path{sql/06-migracion-pg.sql}, sigue el orden de las dependencias entre tablas y termina comparando el número de filas en Oracle y en PostgreSQL:
+
+\begin{lstlisting}[style=sql]
+FOR r IN (SELECT * FROM regions ORDER BY region_id) LOOP
+  INSERT INTO "regions"@pg_link ("region_id","region_name")
+  VALUES (r.region_id, r.region_name);
+END LOOP;
+-- ... countries, locations, jobs, departments, employees, job_history
+COMMIT;
+\end{lstlisting}
+
+\captura[0.8\textwidth]{s4_migracion.png}{\texttt{ORA-02025} con \texttt{INSERT ... SELECT} y migración completa con PL/SQL: los recuentos coinciden}{fig:migracion}
+
+% --------------------------------------------------
+\subsection{Verificación en PostgreSQL}
+
+Por último, en PostgreSQL se crean las claves ajenas (\path{sql/postgres/02-claves-ajenas.sql}), lo que confirma que los datos copiados mantienen la integridad referencial, y se consultan los recuentos y algunos registros (\path{sql/postgres/03-verificar.sql}):
+
+\captura[0.8\textwidth]{s4_pg_verificacion.png}{Diez claves ajenas creadas y datos de HR en PostgreSQL}{fig:pgverif}
+
+% --------------------------------------------------
+\subsection{Snapshot}
+
+\begin{lstlisting}[language=bash]
+virsh -c qemu:///system snapshot-create-as delfos --name s4-postgres-dblink \
+      --description "PostgreSQL + DG4ODBC + migracion HR"
+\end{lstlisting}
+
+\captura{s4_snapshots.png}{Instantánea \texttt{s4-postgres-dblink} en Qemu/KVM}{fig:snap4}
+
+Las instantáneas anteriores a \texttt{s4-postgres-dblink} de la lista se guardaron en el disco de KVM sustituido (\texttt{delfos-kvm-backup.qcow2}), por lo que no se pueden restaurar sobre el disco actual.
+
+% --------------------------------------------------
+\subsection{Verificación}
+
+Para dar por concluido el apartado se han realizado las comprobaciones de la Tabla~\ref{tab:verif4}, todas ellas con resultado satisfactorio.
+
+\begin{table}[!htbp]
+    \centering
+    \small
+    \begin{tabularx}{\textwidth}{L{3.4cm} L{5.2cm} Y}
+        \toprule
+        \textbf{Comprobación} & \textbf{Comando} & \textbf{Resultado esperado} \\
+        \midrule
+        Red tras el traslado & \texttt{ip -br a}, \texttt{getent hosts delfos.inf} & \texttt{192.168.3.133} en \texttt{enp1s0} \\
+        \textit{Listener} & \texttt{lsnrctl status} & \texttt{BAHIA.inf}, \texttt{bahiapdb.inf} y \texttt{PGSQL} (Fig.~\ref{fig:locallistener}) \\
+        PostgreSQL & \texttt{\textbackslash dt hr.*} & Siete tablas en \texttt{hr} (Fig.~\ref{fig:script7}) \\
+        ODBC & \texttt{isql -v PG\_RRHH} & \texttt{Connected!}, esquema \texttt{hr} (Fig.~\ref{fig:isql}) \\
+        \textit{Gateway} & \texttt{tnsping PGSQL} & Correcto (Fig.~\ref{fig:script8}) \\
+        \textit{Database link} & \texttt{SELECT ... FROM "pg\_tables"@pg\_link} & Siete tablas (Fig.~\ref{fig:dblinkok}) \\
+        Migración & \path{sql/06-migracion-pg.sql} & Recuentos iguales en Oracle y PostgreSQL (Fig.~\ref{fig:migracion}) \\
+        Integridad & \path{sql/postgres/02-claves-ajenas.sql} & Diez claves ajenas creadas (Fig.~\ref{fig:pgverif}) \\
+        Snapshot & \texttt{virsh snapshot-list delfos} & \texttt{s4-postgres-dblink} (Fig.~\ref{fig:snap4}) \\
+        \bottomrule
+    \end{tabularx}
+    \caption{Comprobaciones del Apartado 4}
+    \label{tab:verif4}
+\end{table}
+
+Los comandos se han recogido en los scripts \path{scripts/07-postgres-odbc.sh} y \path{scripts/08-dg4odbc.sh}, los ficheros de configuración del \textit{gateway} en \texttt{scripts/}, y las sentencias SQL en \texttt{sql/} y \texttt{sql/postgres/} del repositorio.
