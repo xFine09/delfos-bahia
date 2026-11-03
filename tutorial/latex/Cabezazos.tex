@@ -151,6 +151,53 @@ Reintroducir las credenciales. \\
 «I'm sorry oracle. I'm afraid I can't do that» al usar \cmd{sudo}. &
 El usuario \cmd{oracle} no tiene (ni debe tener) privilegios de \cmd{sudo}. &
 Ejecutar las tareas de sistema con \cmd{sercal} (\cmd{su - sercal}). \\
+\rowcolor{gray!12}\multicolumn{6}{@{}l}{\textbf{Apartado 3: acceso remoto y cliente Oracle}} \\
+
+\ref{cab:ufw} & 20/10/2026 & Cortafuegos &
+\cmd{ufw status} muestra \cmd{inactive} tras añadir la regla del 1521. &
+El cortafuegos no quedó activado en el Apartado 1. &
+\cmd{ufw allow OpenSSH}, \cmd{ufw allow 1521/tcp} y \cmd{ufw enable}. \\
+
+\ref{cab:orapw} & 20/10/2026 & Acceso remoto &
+\cmd{orapwXE} no existe en \cmd{$ORACLE_HOME/dbs}. &
+Oracle 21c usa un ORACLE\_HOME de solo lectura: los ficheros de instancia van en \cmd{$ORACLE_BASE/dbs}. &
+\cmd{orabaseconfig}; el fichero está en \cmd{/opt/oracle/dbs/orapwXE}. \\
+
+\ref{cab:libaiodeb} & 28/10/2026 & Cliente &
+\cmd{sqlplus -v} en Debian: no encuentra \cmd{libaio.so.1}. &
+Debian 13 la distribuye como \cmd{libaio.so.1t64}. &
+\cmd{ln -s libaio.so.1t64 libaio.so.1} y \cmd{ldconfig}. \\
+\rowcolor{gray!12}\multicolumn{6}{@{}l}{\textbf{Apartado 4: PostgreSQL y servicios heterogéneos}} \\
+
+\ref{cab:netplanvbox} & 03/11/2026 & Traslado VM &
+La IP fija no se aplica en KVM; la VM toma \cmd{192.168.3.212} por DHCP. &
+Netplan configuraba \cmd{enp0s3} (VirtualBox); en KVM la interfaz es \cmd{enp1s0}. &
+Renombrar la interfaz en \cmd{00-installer-config.yaml} y \cmd{netplan try}. \\
+
+\ref{cab:hostsvbox} & 03/11/2026 & Traslado VM &
+\cmd{ORA-12543}: host de destino no accesible. &
+\cmd{/etc/hosts} sin \cmd{delfos.inf}: se resolvía a la IPv6 \cmd{fe80::}. &
+Añadir \cmd{192.168.3.133 delfos.inf delfos} y quitar \cmd{127.0.1.1 delfos}. \\
+
+\ref{cab:locallistener} & 03/11/2026 & Listener &
+La base de datos no se registra; solo aparece \cmd{PGSQL}. &
+\cmd{local_listener} vacío y resolución antigua del nombre. &
+\cmd{local_listener} con la IP explícita y \cmd{ALTER SYSTEM REGISTER}. \\
+
+\ref{cab:systempwd} & 03/11/2026 & DB link &
+\cmd{ORA-01017} al conectar como \cmd{SYSTEM}. &
+Contraseña distinta de la definida en DBCA. &
+\cmd{sqlplus / as sysdba} y \cmd{ALTER SESSION SET CONTAINER = BAHIAPDB}. \\
+
+\ref{cab:im002} & 03/11/2026 & DG4ODBC &
+\cmd{ORA-28500} con \cmd{IM002}: DSN no encontrado, aunque \cmd{isql} funciona. &
+Modo Unicode del gateway (\cmd{AL32UTF8} + \cmd{HS_NLS_NCHAR = UCS2}). &
+\cmd{HS_LANGUAGE = AMERICAN_AMERICA.WE8ISO8859P15}, sin \cmd{HS_NLS_NCHAR}. \\
+
+\ref{cab:ora02025} & 03/11/2026 & Migración &
+\cmd{ORA-02025} en \cmd{INSERT ... SELECT} hacia PostgreSQL. &
+Los servicios heterogéneos no admiten DML que mezcle tablas locales y remotas. &
+Bucle PL/SQL que inserta fila a fila con \cmd{VALUES}. \\
 \end{xltabular}
 }
 

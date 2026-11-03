@@ -1,0 +1,6 @@
+# $ORACLE_HOME/network/admin/tnsnames.ora en delfos.inf (para tnsping PGSQL)
+PGSQL =
+  (DESCRIPTION =
+    (ADDRESS = (PROTOCOL = TCP)(HOST = delfos.inf)(PORT = 1521))
+    (CONNECT_DATA = (SID = PGSQL))
+    (HS = OK))

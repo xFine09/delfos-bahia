@@ -1,0 +1,11 @@
+# ~/oracle/network/admin/tnsnames.ora en el equipo CLIENTE
+# Requiere: export TNS_ADMIN=~/oracle/network/admin  (fish: set -Ux TNS_ADMIN ...)
+BAHIA =
+  (DESCRIPTION =
+    (ADDRESS = (PROTOCOL = TCP)(HOST = delfos.inf)(PORT = 1521))
+    (CONNECT_DATA = (SERVER = DEDICATED)(SERVICE_NAME = BAHIA.inf)))
+
+BAHIAPDB =
+  (DESCRIPTION =
+    (ADDRESS = (PROTOCOL = TCP)(HOST = delfos.inf)(PORT = 1521))
+    (CONNECT_DATA = (SERVER = DEDICATED)(SERVICE_NAME = bahiapdb.inf)))
